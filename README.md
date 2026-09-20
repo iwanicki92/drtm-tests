@@ -23,8 +23,9 @@ needs that build. Point `DRTM_QEMU_BINARY` at it.
     `libpixman-1-dev`, plus `libgcrypt20-dev` or `nettle-dev` for the RSA
     behind the PSP path's signature check. Without one of those two the
     build still runs, and the check is skipped and reported as
-    `unsupported`. `docs/qemu.md`, "Building the `drtm` branch", has the
-    configure line.
+    `unsupported`. [Building the `drtm`
+    branch](docs/qemu.md#building-the-drtm-branch) has the configure
+    line.
 - `swtpm` and `swtpm-tools` on `PATH`. The `emulator` backend is the only
     one carrying the locality 4 hash sequence, and every boot seeds a
     fresh TPM state with `swtpm_setup`.
@@ -62,8 +63,8 @@ uv run tb-boot query    # the launch record of the running instance
 
 `docs/design.md` says why the suite is shaped as it is,
 `docs/testing.md` what a boot looks like and what the tests assert, and
-`docs/qemu.md` what every QEMU argument is for and how to read the launch
-traces.
+`docs/qemu.md` how to build the `drtm` branch, what every QEMU argument
+is for and how to read the launch traces.
 
 ## License
 

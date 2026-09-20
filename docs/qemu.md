@@ -4,12 +4,44 @@ SPDX-FileCopyrightText: 2026 iwanicki92 <iwanicki92@gmail.com>
 SPDX-License-Identifier: BSD-3-Clause
 -->
 
-# The QEMU command line and its traces
+# Building the `drtm` QEMU, its command line and its traces
 
-What the harness runs for every boot, argument by argument, what
-the `amd-drtm=on` machine option stands for, and how to read the launch
-traces it writes to `qemu.log`. `uv run tb-boot -n` prints the exact
-command for a boot by hand.
+How to build the `drtm` branch of QEMU, what the harness runs on it
+for every boot, argument by argument, what the `amd-drtm=on` machine
+option stands for, and how to read the launch traces it writes to
+`qemu.log`. `uv run tb-boot -n` prints the exact command for a boot by
+hand.
+
+## Building the `drtm` branch
+
+Upstream QEMU raises `#UD` on `SKINIT` and knows none of the DRTM
+devices, so every boot needs a build of the `drtm` branch. QEMU's own
+build wants a C toolchain, `ninja-build`, `pkg-config`, Python 3 with
+`tomli`, `libglib2.0-dev` and `libpixman-1-dev`. Two more things decide
+what a launch under it can do:
+
+- `libgcrypt20-dev` or `nettle-dev` at build time. The PSP DRTM service
+    verifies the SKL's RSA-PSS signature at `LAUNCH` through QEMU's crypto
+    layer, which has no RSA without one of them. A build with neither
+    skips the check and reports the signature as `unsupported` in the
+    launch record. The configure summary's `libgcrypt` and `nettle` lines
+    say which one a build has.
+- `swtpm` and `swtpm-tools` at run time. The `emulator` backend is the
+    only one carrying the locality 4 hash sequence, and the harness seeds
+    each TPM state with `swtpm_setup`.
+
+The configure line the suite is developed against, from an empty `build`
+directory inside the tree:
+
+```sh
+../configure --target-list=x86_64-softmmu --enable-tpm --disable-docs
+ninja qemu-system-x86_64
+```
+
+Name the target: a bare `ninja` builds every test binary as well and takes
+many times longer. Check the summary for `TPM support: YES`, and run
+configure again after installing a library, since the build does not
+notice a new one on its own.
 
 ## The command
 
@@ -50,37 +82,7 @@ qemu-system-x86_64 \
     -serial mon:stdio
 ```
 
-`qemu-system-x86_64` has to be the `drtm` branch build: upstream raises
-`#UD` on `SKINIT` and knows none of the devices above.
-
-### Building the `drtm` branch
-
-QEMU's own build wants a C toolchain, `ninja-build`, `pkg-config`, Python
-3 with `tomli`, `libglib2.0-dev` and `libpixman-1-dev`. Two more things
-decide what a launch under it can do:
-
-- `libgcrypt20-dev` or `nettle-dev` at build time. The PSP DRTM service
-    verifies the SKL's RSA-PSS signature at `LAUNCH` through QEMU's crypto
-    layer, which has no RSA without one of them. A build with neither
-    skips the check and reports the signature as `unsupported` in the
-    launch record. The configure summary's `libgcrypt` and `nettle` lines
-    say which one a build has.
-- `swtpm` and `swtpm-tools` at run time. The `emulator` backend is the
-    only one carrying the locality 4 hash sequence, and the harness seeds
-    each TPM state with `swtpm_setup`.
-
-The configure line the suite is developed against, from an empty `build`
-directory inside the tree:
-
-```sh
-../configure --target-list=x86_64-softmmu --enable-tpm --disable-docs
-ninja qemu-system-x86_64
-```
-
-Name the target: a bare `ninja` builds every test binary as well and takes
-many times longer. Check the summary for `TPM support: YES`, and run
-configure again after installing a library, since the build does not
-notice a new one on its own.
+`qemu-system-x86_64` is the `drtm` branch build from above.
 
 ### The `amd-drtm=on` shorthand
 
