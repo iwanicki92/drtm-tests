@@ -15,10 +15,10 @@ uv run pytest -k xen_efi      # one entry's tests, and only its boot
 uv run pytest --collect-only  # what would run, booting nothing
 ```
 
-`swtpm` must be on `PATH`. The session refuses a QEMU that rejects
-`-machine q35,amd-drtm=on` before booting anything. `DRTM_QEMU_ACCEL=kvm`
-switches to KVM, which boots the normal entries faster and cannot run the
-launches.
+`swtpm` and `swtpm_setup` (Debian: `swtpm-tools`) must be on `PATH`. The
+session refuses a QEMU that rejects `-machine q35,amd-drtm=on` before
+booting anything. `DRTM_QEMU_ACCEL=kvm` switches to KVM, which boots the
+normal entries faster and cannot run the launches.
 
 Only the boots the collected tests need are started, and they start at
 collection, so a run of one test boots once and a full run has every boot

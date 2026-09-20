@@ -9,7 +9,6 @@ an swtpm behind it when asked for. What it boots is the caller's options.
 import os
 import shutil
 import socket
-import struct
 import subprocess
 import tempfile
 import threading
@@ -135,16 +134,6 @@ def qmp_args(sock: str) -> list[str]:
 # with these two.
 PCR_BANKS: tuple[str, ...] = ("sha1", "sha256")
 
-# TPM_ALG_ID values of the banks libtpms implements.
-_TPM_ALG = {"sha1": 0x0004, "sha256": 0x000B, "sha384": 0x000C, "sha512": 0x000D}
-
-_TPM_RH_PLATFORM = 0x4000000C
-_TPM_RS_PW = 0x40000009
-_TPM_ST_NO_SESSIONS = 0x8001
-_TPM_ST_SESSIONS = 0x8002
-_TPM_CC_PCR_ALLOCATE = 0x0000012B
-_TPM_CC_SHUTDOWN = 0x00000145
-_TPM_SU_CLEAR = 0x0000
 _STATE_FILE = "tpm2-00.permall"
 
 
@@ -162,81 +151,26 @@ def _wait_for_socket(process: subprocess.Popen, sock: str, what: str) -> None:
     raise TimeoutError(f"swtpm never created its {what} at {sock}")
 
 
-def _tpm_command(sock: socket.socket, tag: int, code: int, body: bytes) -> bytes:
-    """Sends one TPM 2.0 command and returns the response after its header,
-    raising on a response code other than success."""
-    sock.sendall(struct.pack(">HII", tag, 10 + len(body), code) + body)
-    response = sock.recv(4096)
-    _, _, rc = struct.unpack(">HII", response[:10])
-    if rc != 0:
-        raise RuntimeError(f"TPM command {code:#x} failed with {rc:#x}")
-    return response[10:]
-
-
 def allocate_pcr_banks(state_dir: Path, banks: Iterable[str], log_f) -> None:
-    """Writes a TPM state into `state_dir` with only `banks` active.
-
-    A throwaway swtpm on its own data socket takes TPM2_PCR_Allocate under
-    the platform hierarchy, whose password is empty until firmware runs,
-    and the allocation is in force from its next start.
-    """
-    wanted = set(banks)
-    unknown = wanted - _TPM_ALG.keys()
-    if unknown:
-        raise ValueError(f"no such PCR bank: {sorted(unknown)}")
+    """Writes a TPM 2.0 state into `state_dir` with only `banks` active,
+    through `swtpm_setup`. A state already there is left alone."""
     state_dir.mkdir(parents=True, exist_ok=True)
-    data_sock = _short_socket_path("drtmtest-tpmseed-")
-    ctrl_sock = _short_socket_path("drtmtest-tpmseed-ctrl-")
-    process = subprocess.Popen(
+    subprocess.run(
         [
-            "swtpm",
-            "socket",
+            "swtpm_setup",
             "--tpm2",
             "--tpmstate",
-            f"dir={state_dir}",
-            "--server",
-            f"type=unixio,path={data_sock}",
-            "--ctrl",
-            f"type=unixio,path={ctrl_sock}",
-            "--flags",
-            "not-need-init,startup-clear",
+            str(state_dir),
+            "--pcr-banks",
+            ",".join(banks),
+            "--not-overwrite",
         ],
         stdout=log_f,
         stderr=subprocess.STDOUT,
+        check=True,
     )
-    try:
-        _wait_for_socket(process, data_sock, "data socket")
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            sock.settimeout(5.0)
-            sock.connect(data_sock)
-            selection = b"".join(
-                struct.pack(
-                    ">HB3s", alg, 3, b"\xff\xff\xff" if name in wanted else b"\0\0\0"
-                )
-                for name, alg in _TPM_ALG.items()
-            )
-            body = struct.pack(">I", _TPM_RH_PLATFORM)
-            body += struct.pack(">IIHBH", 9, _TPM_RS_PW, 0, 0, 0)
-            body += struct.pack(">I", len(_TPM_ALG)) + selection
-            result = _tpm_command(sock, _TPM_ST_SESSIONS, _TPM_CC_PCR_ALLOCATE, body)
-            # Past the parameter size: allocationSuccess, maxPCR, sizeNeeded,
-            # sizeAvailable.
-            success = struct.unpack(">B", result[4:5])[0]
-            if success != 1:
-                raise RuntimeError(f"TPM2_PCR_Allocate refused: {result.hex()}")
-            _tpm_command(
-                sock,
-                _TPM_ST_NO_SESSIONS,
-                _TPM_CC_SHUTDOWN,
-                struct.pack(">H", _TPM_SU_CLEAR),
-            )
-    finally:
-        process.terminate()
-        process.wait(timeout=5.0)
-        for path in (data_sock, ctrl_sock):
-            Path(path).unlink(missing_ok=True)
     if not (state_dir / _STATE_FILE).exists():
-        raise RuntimeError(f"swtpm wrote no {_STATE_FILE} into {state_dir}")
+        raise RuntimeError(f"swtpm_setup wrote no {_STATE_FILE} into {state_dir}")
 
 
 def start_swtpm(
@@ -251,13 +185,13 @@ def start_swtpm(
     or swtpm's own full set when that is None. A state already there is
     used as it is.
 
-    Errors go to stderr regardless of `--log`, so a log holding only the
-    seeding swtpm's disconnect line means a clean run. `DRTM_SWTPM_LOG_LEVEL`
-    adds debug tracing: level 5 and above enables libtpms logging, 20 dumps
-    every command.
+    Errors go to stderr regardless of `--log`, so a log holding only
+    `swtpm_setup`'s lines means a clean run. `DRTM_SWTPM_LOG_LEVEL` adds
+    debug tracing: level 5 and above enables libtpms logging, 20 dumps every
+    command.
     """
     state_dir.mkdir(parents=True, exist_ok=True)
-    if pcr_banks is not None and not (state_dir / _STATE_FILE).exists():
+    if pcr_banks is not None:
         allocate_pcr_banks(state_dir, pcr_banks, log_f)
     args = [
         "swtpm",
