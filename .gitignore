@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 iwanicki92 <iwanicki92@gmail.com>
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Claude Code
+.claude/
+CLAUDE.local.md
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Python, managed by uv
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Downloads and the unpacked image
+dl-cache/
+
+# Per-run logs (serial, QEMU and swtpm output)
+logs/
+
+# Working directory of tb-boot
+run/

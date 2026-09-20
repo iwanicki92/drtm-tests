@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 iwanicki92 <iwanicki92@gmail.com>
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+version: "3"
+
+tasks:
+  lint:
+    desc: Run all linters and formatters (see .pre-commit-config.yaml)
+    cmds:
+      - pre-commit run --all-files {{.CLI_ARGS}}
+
+  test:
+    desc: Boot every GRUB entry and run the assertions
+    cmds:
+      - uv run pytest {{.CLI_ARGS}}
+
+  boot:
+    desc: Boot the image by hand with the console on stdio
+    cmds:
+      - uv run tb-boot {{.CLI_ARGS}}

@@ -1,0 +1,10 @@
+drtm-tests
+
+This project is licensed under the BSD 3-Clause License, see
+LICENSES/BSD-3-Clause.txt.
+
+tbtest/qmp_client.py includes software adapted from
+Open Source Firmware Validation, Copyright 2024 3mdeb
+(https://github.com/Dasharo/open-source-firmware-validation), licensed under
+the Apache License, Version 2.0, and stays under that license. See
+LICENSES/Apache-2.0.txt.

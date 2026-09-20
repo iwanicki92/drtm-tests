@@ -1,0 +1,28 @@
+{
+    // SPDX-FileCopyrightText: 2026 iwanicki92 <iwanicki92@gmail.com>
+    //
+    // SPDX-License-Identifier: BSD-3-Clause
+
+    // Encodes the house style from the markdown-style skill, so pre-commit
+    // and CI enforce the same rules as local development.
+    "config": {
+        "default": true,
+
+        // Wrap prose at 80 columns. Leave tables and code blocks alone, and
+        // (via the default stern:false) don't flag lines that can't be
+        // broken at a space, e.g. long URLs.
+        "MD013": {
+            "line_length": 80,
+            "code_blocks": false,
+            "tables": false,
+            "headings": true
+        },
+
+        // Nested list items indent by 4 spaces.
+        "MD007": { "indent": 4 },
+
+        // Emphasis: _italic_ with underscores, **bold** with asterisks.
+        "MD049": { "style": "underscore" },
+        "MD050": { "style": "asterisk" }
+    }
+}
