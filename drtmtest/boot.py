@@ -21,9 +21,17 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tbtest import assets
-from tbtest.qemu_vm import DEFAULT_MEM, DEFAULT_SMP, qemu_args, start_swtpm
-from tbtest.qmp_client import QmpClient
+from drtmtest import machine, trenchboot
+from drtmtest.dasharo import FIRMWARE
+from drtmtest.qemu_vm import (
+    binary,
+    pflash_args,
+    qmp_args,
+    start_swtpm,
+    tpm_args,
+    use_kvm,
+)
+from drtmtest.qmp_client import QmpClient
 
 RUN_DIR = Path(__file__).resolve().parent.parent / "run"
 
@@ -43,8 +51,8 @@ def main() -> int:
         default="dasharo",
         help="Dasharo's UEFI build as flash, or QEMU's SeaBIOS for legacy boot",
     )
-    parser.add_argument("-m", "--mem", default=DEFAULT_MEM)
-    parser.add_argument("-s", "--smp", type=int, default=DEFAULT_SMP)
+    parser.add_argument("-m", "--mem", default=machine.DEFAULT_MEM)
+    parser.add_argument("-s", "--smp", type=int, default=machine.DEFAULT_SMP)
     parser.add_argument(
         "-w", "--writable", action="store_true", help="write to the image, no snapshot"
     )
@@ -67,21 +75,34 @@ def main() -> int:
         firmware = RUN_DIR / "firmware.rom"
         if not firmware.exists():
             # Kept between runs, so the variable store persists like on a board.
-            shutil.copy(assets.FIRMWARE.fetch(), firmware)
-    image = assets.unpacked_image()
+            shutil.copy(FIRMWARE.fetch(trenchboot.CACHE_DIR), firmware)
+    image = trenchboot.unpacked_image()
     swtpm_sock = RUN_DIR / "swtpm.sock"
     qmp_sock.unlink(missing_ok=True)
-    args = qemu_args(
-        firmware,
-        image,
-        str(swtpm_sock),
-        str(qmp_sock),
-        smp=opts.smp,
-        mem=opts.mem,
-        strict=not opts.no_strict,
-        snapshot=not opts.writable,
-        log_file=RUN_DIR / "qemu.log",
-    )
+    # The same line the tests run, `docs/qemu.md` explains it, with the
+    # console on stdio instead of a socket.
+    args = [
+        binary(),
+        "-accel",
+        "kvm" if use_kvm() else "tcg",
+        "-display",
+        "none",
+        "-action",
+        "panic=pause",
+        "-D",
+        str(RUN_DIR / "qemu.log"),
+        *machine.options(
+            image,
+            smp=opts.smp,
+            mem=opts.mem,
+            strict=not opts.no_strict,
+            snapshot=not opts.writable,
+        ),
+        *tpm_args(str(swtpm_sock)),
+        *qmp_args(str(qmp_sock)),
+    ]
+    if firmware is not None:
+        args += pflash_args(firmware)
     args += ["-serial", "mon:stdio", *opts.rest]
     if opts.dry_run:
         print(shlex.join(args))

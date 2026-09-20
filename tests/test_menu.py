@@ -6,7 +6,7 @@
 
 from conftest import ENTRIES, Boot
 
-from tbtest.console import menu_titles
+from drtmtest.console import menu_titles
 
 MENU = (
     "\x1b[05;03H*Boot Linux normally                    \x1b[0m"

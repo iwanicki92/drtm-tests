@@ -9,11 +9,8 @@ GRUB menu, the OS banner, the login and commands at the shell.
 import re
 from dataclasses import dataclass
 
-from tbtest.qemu_vm import QemuVm
-
-# Dasharo's boot manager prompt. ENTER boots the default entry at once
-# instead of after its own timeout.
-BOOT_PROMPT = "ENTER to boot directly"
+from drtmtest.dasharo import BOOT_PROMPT
+from drtmtest.qemu_vm import QemuVm
 
 # GRUB prints this under the finished menu and boots the first entry a few
 # seconds later unless a key arrives.

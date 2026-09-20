@@ -86,5 +86,5 @@ backstop, raising inside the test so `results.txt` is still written. A
 panic on the console, or the VM stopping under strict mode, which the
 pause panic action keeps alive to be seen, ends the wait at once with the
 reason, and a console silent for `IDLE_TIMEOUT` in
-`tbtest/qemu_vm.py` ends it as a hang, since no phase of a boot pauses
+`drtmtest/qemu_vm.py` ends it as a hang, since no phase of a boot pauses
 that long.

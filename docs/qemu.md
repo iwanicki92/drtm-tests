@@ -6,7 +6,7 @@ SPDX-License-Identifier: BSD-3-Clause
 
 # The QEMU command line and its traces
 
-What `tbtest/qemu_vm.py` runs for every boot, argument by argument, what
+What the harness runs for every boot, argument by argument, what
 the `amd-drtm=on` machine option stands for, and how to read the launch
 traces it writes to `qemu.log`. `uv run tb-boot -n` prints the exact
 command for a boot by hand.

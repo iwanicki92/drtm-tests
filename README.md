@@ -27,7 +27,7 @@ The first run downloads the Dasharo firmware and the image release into
 writes its logs to a numbered directory under `logs/`.
 
 The image is the newest meta-trenchboot release by default. Set
-`DRTM_TB_RELEASE` to another tag pinned in `tbtest/assets.py` to boot that
+`DRTM_TB_RELEASE` to another tag pinned in `drtmtest/trenchboot.py` to boot that
 one instead, a release candidate for instance. Each release keeps its own
 download and unpacked disk in `dl-cache/`.
 
@@ -45,6 +45,6 @@ traces.
 
 ## License
 
-BSD-3-Clause, see [LICENSE](LICENSE). `tbtest/qmp_client.py` is adapted
+BSD-3-Clause, see [LICENSE](LICENSE). `drtmtest/qmp_client.py` is adapted
 from third-party Apache-2.0 code and stays under that license, see
 [NOTICE](NOTICE).

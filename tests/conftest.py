@@ -12,29 +12,24 @@ memory allow, so a fixture is usually just waiting on a boot in flight.
 """
 
 import os
-import re
-import threading
-import time
-from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 
 import pytest
 
-from tbtest import assets
-from tbtest.console import LINUX_BANNER, XEN_BANNER, Console
-from tbtest.qemu_vm import DEFAULT_SMP, QemuVm, unsupported_binary
+from drtmtest import machine, trenchboot
+from drtmtest.console import LINUX_BANNER, XEN_BANNER, Console
+from drtmtest.dasharo import FIRMWARE, warmed_firmware
+from drtmtest.qemu_vm import QemuVm
+from drtmtest.session import BootSession
 
 LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
-_RUN_DIR_RE = re.compile(r"^(\d{4})-")
-_MAX_RUN_NUMBER = 9999
 
 # From the QEMU launch to the login prompt is about 80 s on an idle 8-core
 # host. Boots overlap, so the allowance is for a full batch of them.
 BOOT_TIMEOUT = 420.0
 
-# Each guest's memory, matched to -m in tbtest.qemu_vm. dom0 boots in it,
+# Each guest's memory, matched to -m in drtmtest.machine. dom0 boots in it,
 # and it is what lets six boots share a 16 GB host.
 GUEST_MEM_GIB = 2
 
@@ -113,80 +108,35 @@ PCR_ZERO = "0" * 64
 PCR_ONES = "f" * 64
 
 
-def _next_run_number() -> int:
-    if not LOGS_DIR.exists():
-        return 1
-    numbers = [
-        int(match.group(1))
-        for path in LOGS_DIR.iterdir()
-        if path.is_dir() and (match := _RUN_DIR_RE.match(path.name))
-    ]
-    return max(numbers, default=0) + 1
+def _warmed_firmware() -> Path:
+    """The firmware after one boot to the GRUB menu, made on first use."""
 
-
-_run_log_dir: Path | None = None
-_run_log_dir_lock = threading.Lock()
-
-
-def _get_run_log_dir() -> Path:
-    """Creates this run's log directory on first use, then reuses it."""
-    global _run_log_dir
-    with _run_log_dir_lock:
-        if _run_log_dir is not None:
-            return _run_log_dir
-        number = _next_run_number()
-        if number > _MAX_RUN_NUMBER:
-            pytest.exit(
-                f"logs/ has reached run {_MAX_RUN_NUMBER}, the 4-digit limit. "
-                "Clean out old runs before testing again.",
-                returncode=1,
-            )
-        now = datetime.now().astimezone()
-        run_dir = LOGS_DIR / f"{number:04d}-{now.date().isoformat()}"
-        run_dir.mkdir(parents=True)
-        (run_dir / "timestamp.txt").write_text(now.isoformat() + "\n")
-        _run_log_dir = run_dir
-        return run_dir
-
-
-_warm_lock = threading.Lock()
-
-
-def warmed_firmware() -> Path:
-    """The firmware after one boot to the GRUB menu, made on first use.
-
-    Populating the variable store happens once, on an image that has never
-    booted, so every boot after this one starts from a store that is there.
-    """
-    path = assets.warmed_firmware_path()
-    with _warm_lock:
-        if path.exists():
-            return path
-        scratch = path.with_suffix(".warming")
-        log_dir = _get_run_log_dir() / "boot-warm-firmware"
+    def boot(scratch: Path) -> None:
+        log_dir = SESSION.run_log_dir() / "boot-warm-firmware"
         with QemuVm(
             log_dir,
-            firmware=assets.FIRMWARE.fetch(),
-            image=assets.unpacked_image(),
+            machine.options(trenchboot.unpacked_image()),
+            firmware=FIRMWARE.fetch(trenchboot.CACHE_DIR),
+            tpm="tis",
             save_firmware_to=scratch,
         ) as vm:
             # Let GRUB's own timeout boot the first entry: what matters is
             # that the firmware wrote its store and exited cleanly.
             Console(vm, BOOT_TIMEOUT).select_entry(ENTRIES["linux"].title)
-        scratch.replace(path)
-    return path
+
+    return warmed_firmware(trenchboot.CACHE_DIR, boot)
 
 
-def _boot(name: str) -> Boot:
+def _boot(name: str, log_dir: Path) -> Boot:
     entry = ENTRIES[name]
-    log_dir = _get_run_log_dir() / f"boot-{name.replace('_', '-')}"
     boot = Boot(entry, log_dir)
     dasharo = entry.firmware == "dasharo"
     try:
         with QemuVm(
             log_dir,
-            firmware=warmed_firmware() if dasharo else None,
-            image=assets.unpacked_image(),
+            machine.options(trenchboot.unpacked_image()),
+            firmware=_warmed_firmware() if dasharo else None,
+            tpm="tis",
         ) as vm:
             console = Console(vm, BOOT_TIMEOUT)
             boot.titles = console.select_entry(entry.title, boot_prompt=dasharo)
@@ -209,17 +159,13 @@ def _boot(name: str) -> Boot:
     return boot
 
 
-_boot_pool: ThreadPoolExecutor | None = None
-_boot_futures: dict[str, Future[Boot]] = {}
-
-
 def _workers() -> int:
     """How many guests fit at once: by CPU at `-smp 2` and by free memory.
 
     Read at the time of the run, so a host booted with less runs fewer boots
     at a time rather than swapping.
     """
-    by_cpu = (os.cpu_count() or 1) // DEFAULT_SMP
+    by_cpu = (os.cpu_count() or 1) // machine.DEFAULT_SMP
     available_gib = 0
     with open("/proc/meminfo") as f:
         for line in f:
@@ -229,42 +175,39 @@ def _workers() -> int:
     return max(1, min(by_cpu, by_mem))
 
 
-@pytest.hookimpl(trylast=True)
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]):
-    """Starts every boot the collected tests need, before the first runs.
-
-    Last of its hook, so `-k` and `-m` have already dropped what is not
-    being run and its boots are never started.
-    """
-    if config.option.collectonly:
-        return
-    first_wanted: dict[str, int] = {}
-    for index, item in enumerate(items):
-        for name in getattr(item, "fixturenames", ()):
-            if name in ENTRIES:
-                first_wanted.setdefault(name, index)
-    if not first_wanted:
-        return
-    # Ahead of the pool: one unpack and one warming boot, which the workers
-    # would otherwise queue up behind.
-    assets.unpacked_image()
-    if any(ENTRIES[name].firmware == "dasharo" for name in first_wanted):
-        warmed_firmware()
-    global _boot_pool
-    _boot_pool = ThreadPoolExecutor(_workers(), thread_name_prefix="boot")
-    for name in sorted(first_wanted, key=first_wanted.__getitem__):
-        _boot_futures[name] = _boot_pool.submit(_boot, name)
+def _prepare(names: list[str]) -> None:
+    """One unpack and one warming boot, ahead of the pool."""
+    trenchboot.unpacked_image()
+    if any(ENTRIES[name].firmware == "dasharo" for name in names):
+        _warmed_firmware()
 
 
-def _booted(name: str) -> Boot:
-    future = _boot_futures.get(name)
-    return future.result() if future is not None else _boot(name)
+def _check() -> str | None:
+    reason = machine.unsupported_binary()
+    if reason is None:
+        return None
+    return f"This suite needs the QEMU drtm branch, see docs/testing.md: {reason}"
+
+
+SESSION = BootSession(
+    LOGS_DIR,
+    _boot,
+    ENTRIES.keys(),
+    workers=_workers,
+    prepare=_prepare,
+    check=_check,
+    header=lambda: [f"release:     {trenchboot.release()}"],
+)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.pluginmanager.register(SESSION)
 
 
 def _entry_fixture(name: str):
     @pytest.fixture(scope="session", name=name)
     def wait_for_boot() -> Boot:
-        boot = _booted(name)
+        boot = SESSION.booted(name)
         if boot.error is not None:
             pytest.fail(f"{boot.entry.title!r} did not reach the shell: {boot.error}")
         return boot
@@ -287,68 +230,3 @@ def broken(name: str):
     reason = ENTRIES[name].broken
     assert reason is not None, f"{name} is not marked broken"
     return pytest.mark.xfail(reason=reason, strict=True)
-
-
-_reports: list[pytest.TestReport] = []
-_session_start = 0.0
-
-
-def pytest_sessionstart(session: pytest.Session) -> None:
-    global _session_start
-    _session_start = time.monotonic()
-    reason = unsupported_binary()
-    if reason is not None:
-        pytest.exit(
-            f"This suite needs the QEMU drtm branch, see docs/testing.md: {reason}",
-            returncode=1,
-        )
-
-
-def pytest_runtest_logreport(report: pytest.TestReport) -> None:
-    _reports.append(report)
-
-
-def _outcome_per_test() -> dict[str, tuple[str, float]]:
-    collapsed: dict[str, tuple[str, float]] = {}
-    for report in _reports:
-        outcome, duration = collapsed.get(report.nodeid, ("passed", 0.0))
-        if report.outcome != "passed":
-            outcome = report.outcome
-        collapsed[report.nodeid] = (outcome, duration + report.duration)
-    return collapsed
-
-
-def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Writes `results.txt` beside the run's logs."""
-    if _boot_pool is not None:
-        _boot_pool.shutdown(wait=True, cancel_futures=True)
-    if not _reports:
-        return
-    collapsed = _outcome_per_test()
-    counts: dict[str, int] = {}
-    for outcome, _ in collapsed.values():
-        counts[outcome] = counts.get(outcome, 0) + 1
-    summary = ", ".join(
-        f"{count} {outcome}" for outcome, count in sorted(counts.items())
-    )
-    lines = [
-        f"finished:    {datetime.now().astimezone().isoformat()}",
-        f"release:     {assets.release()}",
-        f"exit status: {exitstatus}",
-        f"summary:     {summary} in {time.monotonic() - _session_start:.1f}s",
-        "",
-    ]
-    lines += [
-        f"{outcome.upper():<7} {duration:7.1f}s  {nodeid}"
-        for nodeid, (outcome, duration) in collapsed.items()
-    ]
-    failures = [report for report in _reports if report.failed]
-    if failures:
-        lines.append("")
-        for report in failures:
-            lines += [
-                f"=== {report.nodeid} ({report.when}) ===",
-                report.longreprtext,
-                "",
-            ]
-    (_get_run_log_dir() / "results.txt").write_text("\n".join(lines) + "\n")

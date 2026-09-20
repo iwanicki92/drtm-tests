@@ -20,9 +20,13 @@ Three things test the AMD dynamic launch under QEMU, and each has a home:
     the other two should not: image and loader versions, a second
     firmware, hardware logs.
 
-The harness here started as a copy of the `drtm` one and diverged where a
-disk image differs from a scratch ESP. If the copies drift apart in ways
-that matter, the shared part becomes a package both take.
+The harness started as a copy of the `drtm` one and is now the package
+both take, `drtmtest`: the QEMU process with its console, QMP and swtpm,
+the pinned downloads, the Dasharo firmware and its warmed copy, and the
+pytest session that boots ahead of the tests. What differs is the machine
+each suite boots, a list of QEMU options either side builds itself, and
+what it does on the console once the machine is up. `drtm` takes the
+package from a checkout beside it until this repository has a remote.
 
 ## What a boot is
 

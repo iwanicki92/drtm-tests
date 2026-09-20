@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""One QEMU process booting the image on the AMD launch machine, with an
-swtpm behind it, its serial console on a socket and QMP beside it.
+"""One QEMU process with its serial console on a socket, QMP beside it and
+an swtpm behind it when asked for. What it boots is the caller's options.
 """
 
 import os
@@ -16,24 +16,7 @@ import time
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from tbtest.qmp_client import QmpClient
-
-# A model with the SKINIT feature. Under `amd-drtm=on` the machine turns
-# the feature on for any model, but Genoa is what the image was built for.
-DEFAULT_CPU = "EPYC-Genoa"
-DEFAULT_SMP = 2
-DEFAULT_MEM = "2G"
-
-# What the launch devices log when asked to, into qemu.log.
-LAUNCH_TRACES = (
-    "amd_drtm_*",
-    "amd_nb_*",
-    "x86_skinit",
-    "x86_vm_cr_write",
-    "x86_sipi_after_launch",
-    "x86_init_held",
-    "x86_init_redirected",
-)
+from drtmtest.qmp_client import QmpClient
 
 # Starting paused and quitting takes well under a second.
 _PROBE_TIMEOUT = 30.0
@@ -47,17 +30,19 @@ def binary() -> str:
     """Which `qemu-system-x86_64` to run, honouring `DRTM_QEMU_BINARY`.
 
     A path, or a name to find on `PATH`. Only a QEMU carrying the `drtm`
-    branch runs SKINIT, which is why this exists.
+    branch runs SKINIT and the devices these suites boot on, which is why
+    this exists.
     """
     return os.environ.get("DRTM_QEMU_BINARY", "qemu-system-x86_64")
 
 
 def use_kvm() -> bool:
-    """Whether to pass `-enable-kvm`, honouring `DRTM_QEMU_ACCEL`.
+    """Whether to run under KVM, honouring `DRTM_QEMU_ACCEL`.
 
-    `tcg` is the default and the only accelerator that runs SKINIT. `kvm`
-    forces KVM and `auto` picks it whenever `/dev/kvm` is usable, kept for
-    booting the normal entries faster.
+    `tcg` is the default: it is the only accelerator that runs SKINIT, and
+    a guest with `smm=on` measured slower under KVM on every machine tried,
+    about 2x on a nested-virtualisation host. `kvm` forces KVM and `auto`
+    picks it whenever `/dev/kvm` is usable.
     """
     accel = os.environ.get("DRTM_QEMU_ACCEL", "tcg").lower()
     if accel == "tcg":
@@ -71,15 +56,18 @@ def use_kvm() -> bool:
     return os.access("/dev/kvm", os.R_OK | os.W_OK)
 
 
-def unsupported_binary() -> str | None:
-    """Why the QEMU in use cannot boot this image, or `None` if it can.
+def unsupported_binary(
+    options: Iterable[str], rejects: Mapping[str, str] | None = None
+) -> str | None:
+    """Why the QEMU in use cannot run a suite, or `None` if it can.
 
-    Starts it paused on the launch machine. Upstream refuses the option.
+    Starts it paused with `options`, the arguments only our build accepts,
+    and quits. Upstream refuses most of them outright. `rejects` maps a
+    substring of a clean probe's stderr to the reason to report, for the
+    ones upstream drops with a warning instead.
     """
     args = [
         binary(),
-        "-machine",
-        "q35,amd-drtm=on",
         "-accel",
         "tcg",
         "-nodefaults",
@@ -88,6 +76,7 @@ def unsupported_binary() -> str | None:
         "-S",
         "-monitor",
         "stdio",
+        *options,
     ]
     try:
         probe = subprocess.run(
@@ -105,97 +94,60 @@ def unsupported_binary() -> str | None:
     if probe.returncode != 0:
         lines = probe.stderr.strip().splitlines()
         return lines[-1] if lines else f"it exited with {probe.returncode}"
+    for needle, reason in (rejects or {}).items():
+        if needle in probe.stderr:
+            return reason
     return None
 
 
-def qemu_args(
-    firmware: Path | None,
-    image: Path,
-    swtpm_sock: str,
-    qmp_sock: str,
-    cpu: str = DEFAULT_CPU,
-    smp: int = DEFAULT_SMP,
-    mem: str = DEFAULT_MEM,
-    strict: bool = True,
-    snapshot: bool = True,
-    log_file: Path | None = None,
-) -> list[str]:
-    """The command line every boot shares, without a serial console.
+def tpm_args(sock: str, kind: str = "tis") -> list[str]:
+    """An swtpm on `sock` as a TPM 2.0 behind the `tis` or `crb` frontend.
 
-    `firmware` is the flash image to boot, or `None` for QEMU's own SeaBIOS,
-    the legacy path the image's MBR also supports. `strict` makes the
-    platform device stop the VM on a broken launch rule, so a wrong launch
-    is a panic the harness sees rather than a line in the log.
+    QEMU's `emulator` backend drives swtpm over its control channel, so one
+    socket serves both.
     """
-    args = [
-        binary(),
-        "-machine",
-        "q35,smm=on,amd-drtm=on",
-        "-accel",
-        "kvm" if use_kvm() else "tcg",
-        "-cpu",
-        cpu,
-        "-smp",
-        str(smp),
-        "-m",
-        mem,
-        "-global",
-        f"amd-drtm-platform.strict={'on' if strict else 'off'}",
-        # A strict stop leaves the VM paused rather than exiting, so the run
-        # state names the rule and the launch record can still be queried.
-        "-action",
-        "panic=pause",
+    if kind not in ("tis", "crb"):
+        raise ValueError(f"tpm must be 'tis' or 'crb', got {kind!r}")
+    return [
         "-chardev",
-        f"socket,id=chrtpm,path={swtpm_sock}",
+        f"socket,id=chrtpm,path={sock}",
         "-tpmdev",
         "emulator,id=tpm0,chardev=chrtpm",
         "-device",
-        "tpm-tis,tpmdev=tpm0",
-        "-drive",
-        f"file={image},format=raw,if=none,id=hd,snapshot={'on' if snapshot else 'off'}",
-        "-device",
-        "ide-hd,drive=hd",
-        "-display",
-        "none",
-        "-vga",
-        "none",
-        "-nic",
-        "none",
-        "-qmp",
-        f"unix:{qmp_sock},server,nowait",
-        "-d",
-        "guest_errors",
+        f"tpm-{kind},tpmdev=tpm0",
     ]
-    if firmware is not None:
-        args += ["-drive", f"if=pflash,format=raw,file={firmware}"]
-    if log_file is not None:
-        args += ["-D", str(log_file)]
-    for trace in LAUNCH_TRACES:
-        args += ["-trace", trace]
-    return args
+
+
+def pflash_args(firmware: Path) -> list[str]:
+    """`firmware` as the flash, variable store included, so hand it a copy."""
+    return ["-drive", f"if=pflash,format=raw,file={firmware}"]
+
+
+def qmp_args(sock: str) -> list[str]:
+    return ["-qmp", f"unix:{sock},server,nowait"]
 
 
 def start_swtpm(state_dir: Path, sock: str, log_f) -> subprocess.Popen:
     """Starts a TPM 2.0 emulator on a Unix socket and waits for the socket.
 
-    QEMU's `emulator` backend drives swtpm over its control channel, so one
-    socket serves both. Errors go to stderr regardless of `--log`, so an
-    empty log means a clean run.
+    Errors go to stderr regardless of `--log`, so an empty log means a
+    clean run. `DRTM_SWTPM_LOG_LEVEL` adds debug tracing: level 5 and above
+    enables libtpms logging, 20 dumps every command.
     """
     state_dir.mkdir(parents=True, exist_ok=True)
-    process = subprocess.Popen(
-        [
-            "swtpm",
-            "socket",
-            "--tpm2",
-            "--tpmstate",
-            f"dir={state_dir}",
-            "--ctrl",
-            f"type=unixio,path={sock}",
-        ],
-        stdout=log_f,
-        stderr=subprocess.STDOUT,
-    )
+    args = [
+        "swtpm",
+        "socket",
+        "--tpm2",
+        "--tpmstate",
+        f"dir={state_dir}",
+        "--ctrl",
+        f"type=unixio,path={sock}",
+    ]
+    level = os.environ.get("DRTM_SWTPM_LOG_LEVEL")
+    if level:
+        args += ["--log", f"fd=1,level={level}"]
+    process = subprocess.Popen(args, stdout=log_f, stderr=subprocess.STDOUT)
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline:
         if Path(sock).exists():
@@ -220,6 +172,8 @@ def _short_socket_path(prefix: str) -> str:
 
 
 def _free_tcp_port() -> int:
+    # Free again between here and QEMU binding it, so two boots starting at
+    # once could in principle pick the same one. Not seen in practice.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
@@ -238,11 +192,14 @@ class GuestHung(RuntimeError):
 
 
 class QemuVm:
-    """Runs one boot of the image as a `with` block.
+    """Runs one QEMU as a `with` block.
 
-    `log_dir` receives the QEMU process's own output and log (`qemu.log`),
-    the swtpm log and the raw serial capture (`serial.log`), written as they
-    arrive so they are useful even if the boot times out.
+    `options` is the machine, CPU, memory and devices: everything but what
+    the harness adds, which is the accelerator, the flash, the TPM, the
+    serial console, QMP, the pause on a panic and the log file. `log_dir`
+    receives the process's own output (`qemu-stderr.log`), its `-D` log
+    (`qemu.log`), the swtpm log and the raw serial capture (`serial.log`),
+    written as they arrive so they are useful even if the boot times out.
 
     The serial console is read by a background thread for the life of the
     block, and `expect` waits on it from a cursor that advances with every
@@ -251,27 +208,24 @@ class QemuVm:
     `firmware` is the flash image to boot, copied per boot so the guest's
     writes to its variable store land on the copy, or `None` for QEMU's own
     SeaBIOS. `save_firmware_to` keeps that copy after a clean exit, which
-    is how the warmed image is made.
+    is how a warmed image is made. `tpm` attaches an swtpm-backed TPM 2.0
+    as `tis` or `crb`, or nothing when `None`.
     """
 
     def __init__(
         self,
         log_dir: Path,
-        firmware: Path | None,
-        image: Path,
-        cpu: str = DEFAULT_CPU,
-        smp: int = DEFAULT_SMP,
-        mem: str = DEFAULT_MEM,
-        strict: bool = True,
+        options: Iterable[str],
+        firmware: Path | None = None,
+        tpm: str | None = None,
         save_firmware_to: Path | None = None,
     ):
+        if tpm is not None:
+            tpm_args("", tpm)
         self.log_dir = Path(log_dir)
+        self.options = list(options)
         self.firmware = Path(firmware) if firmware is not None else None
-        self.image = Path(image)
-        self.cpu = cpu
-        self.smp = smp
-        self.mem = mem
-        self.strict = strict
+        self.tpm = tpm
         self.save_firmware_to = save_firmware_to
         self.qmp: QmpClient | None = None
         self._workdir: str | None = None
@@ -291,37 +245,43 @@ class QemuVm:
 
     def __enter__(self):
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self._workdir = tempfile.mkdtemp(prefix="tbtest-")
+        self._workdir = tempfile.mkdtemp(prefix="drtmtest-")
         serial_log = open(self.log_dir / "serial.log", "wb")
         qemu_out = open(self.log_dir / "qemu-stderr.log", "wb")
-        swtpm_log = open(self.log_dir / "swtpm.log", "wb")
-        self._files = [serial_log, qemu_out, swtpm_log]
+        self._files = [serial_log, qemu_out]
         self._serial_log = serial_log
 
-        firmware: Path | None = None
+        args = [
+            binary(),
+            "-accel",
+            "kvm" if use_kvm() else "tcg",
+            "-display",
+            "none",
+            # A panic leaves the VM stopped rather than exiting, so the run
+            # state names it and QMP still answers about the machine.
+            "-action",
+            "panic=pause",
+            "-D",
+            str(self.log_dir / "qemu.log"),
+            *self.options,
+        ]
         if self.firmware is not None:
             # The variable store lives in this image, so each boot gets a copy.
             firmware = Path(self._workdir) / "firmware.rom"
             shutil.copy(self.firmware, firmware)
             self._firmware_copy = firmware
-
-        self._swtpm_sock = _short_socket_path("tbtest-swtpm-")
-        self._swtpm = start_swtpm(
-            Path(self._workdir) / "swtpm-state", self._swtpm_sock, swtpm_log
-        )
-        self._qmp_sock = _short_socket_path("tbtest-qmp-")
+            args += pflash_args(firmware)
+        if self.tpm is not None:
+            swtpm_log = open(self.log_dir / "swtpm.log", "wb")
+            self._files.append(swtpm_log)
+            self._swtpm_sock = _short_socket_path("drtmtest-swtpm-")
+            self._swtpm = start_swtpm(
+                Path(self._workdir) / "swtpm-state", self._swtpm_sock, swtpm_log
+            )
+            args += tpm_args(self._swtpm_sock, self.tpm)
+        self._qmp_sock = _short_socket_path("drtmtest-qmp-")
+        args += qmp_args(self._qmp_sock)
         serial_port = _free_tcp_port()
-        args = qemu_args(
-            firmware,
-            self.image,
-            self._swtpm_sock,
-            self._qmp_sock,
-            cpu=self.cpu,
-            smp=self.smp,
-            mem=self.mem,
-            strict=self.strict,
-            log_file=self.log_dir / "qemu.log",
-        )
         # `server` without `nowait`: QEMU holds the guest until the console
         # is connected, so the first bytes out are never lost.
         args += ["-serial", f"tcp:127.0.0.1:{serial_port},server"]
@@ -335,6 +295,20 @@ class QemuVm:
         self._reader = threading.Thread(target=self._read_serial, daemon=True)
         self._reader.start()
         return self
+
+    def wait_for_qmp(self, timeout: float = 5.0) -> QmpClient:
+        """The QMP client once QEMU has opened its socket.
+
+        For a boot started with `-S`, which has to be poked over QMP before
+        the console prints anything.
+        """
+        assert self._qmp_sock is not None and self.qmp is not None
+        deadline = time.monotonic() + timeout
+        while not os.path.exists(self._qmp_sock):
+            if time.monotonic() >= deadline:
+                raise TimeoutError("QEMU never created its QMP socket")
+            time.sleep(0.05)
+        return self.qmp
 
     def _connect_serial(self, port: int, timeout: float = 10.0) -> socket.socket:
         deadline = time.monotonic() + timeout
@@ -361,6 +335,8 @@ class QemuVm:
             if not chunk:
                 break
             with self._serial_lock:
+                # `__exit__` closes the log under this lock, so a reader that
+                # outlived the join must not write to it.
                 if self._stop.is_set():
                     break
                 self._serial_log.write(chunk)
@@ -389,9 +365,9 @@ class QemuVm:
     def _check_alive(self) -> None:
         """Raises if QEMU is gone or the VM stopped as panicked.
 
-        Strict mode stops the VM through the panic path, and `-action
-        panic=pause` keeps the process alive and the console silent, so the
-        run state is what says a launch rule broke. Polled once a second.
+        A panic pauses the VM, which leaves the process running and the
+        console silent, so the run state is what says it happened. Polled
+        at most once a second.
         """
         assert self._process is not None
         if self._process.poll() is not None:

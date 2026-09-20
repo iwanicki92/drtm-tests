@@ -15,6 +15,12 @@ the one that runs `SKINIT`, one boot per GRUB entry, and a `tb-boot`
 command that does the same boot by hand. See `docs/design.md` for why and
 `docs/testing.md` for how. `README.md` covers running it.
 
+The `drtmtest` package is also the harness the `drtm` repository's
+`qemu-tests` take, as a path dependency on this checkout. A change to
+`qemu_vm.py`, `session.py`, `assets.py` or `dasharo.py` is a change to
+that suite too, so run it as well. `machine.py`, `console.py`,
+`trenchboot.py` and `boot.py` are this suite's own.
+
 ## Comments and docs
 
 Two or three lines, maximum. State what is true now, not how it was found
