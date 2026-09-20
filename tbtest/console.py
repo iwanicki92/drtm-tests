@@ -23,7 +23,10 @@ MENU_READY = "The highlighted entry will be executed automatically"
 # own, so answering it is for robustness rather than time.
 ANY_KEY = "Press any key to continue"
 
-XEN_BANNER = "(XEN) Xen version"
+# The hypervisor's first line, with or without the timestamp that
+# `console_timestamps=` puts after the "(XEN) " prefix. dom0's own
+# "Xen version:" line comes later and has a colon.
+XEN_BANNER = "Xen version "
 LINUX_BANNER = "Linux version"
 LOGIN_PROMPT = "tb login:"
 SHELL_PROMPT = "root@tb:~#"

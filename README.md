@@ -26,6 +26,11 @@ The first run downloads the Dasharo firmware and the image release into
 `dl-cache/` and unpacks the image there, about 1.5 GB in all. Each run
 writes its logs to a numbered directory under `logs/`.
 
+The image is the newest meta-trenchboot release by default. Set
+`DRTM_TB_RELEASE` to another tag pinned in `tbtest/assets.py` to boot that
+one instead, a release candidate for instance. Each release keeps its own
+download and unpacked disk in `dl-cache/`.
+
 To boot the image by hand, with the serial console on stdio:
 
 ```sh

@@ -323,6 +323,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     )
     lines = [
         f"finished:    {datetime.now().astimezone().isoformat()}",
+        f"release:     {assets.release()}",
         f"exit status: {exitstatus}",
         f"summary:     {summary} in {time.monotonic() - _session_start:.1f}s",
         "",
