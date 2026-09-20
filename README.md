@@ -38,8 +38,10 @@ uv run tb-boot
 uv run tb-boot query    # the launch record of the running instance
 ```
 
-`docs/design.md` says why the suite is shaped as it is and
-`docs/testing.md` what a boot looks like and what the tests assert.
+`docs/design.md` says why the suite is shaped as it is,
+`docs/testing.md` what a boot looks like and what the tests assert, and
+`docs/qemu.md` what every QEMU argument is for and how to read the launch
+traces.
 
 ## License
 
