@@ -153,7 +153,7 @@ def _wait_for_socket(process: subprocess.Popen, sock: str, what: str) -> None:
 
 def allocate_pcr_banks(state_dir: Path, banks: Iterable[str], log_f) -> None:
     """Writes a TPM 2.0 state into `state_dir` with only `banks` active,
-    through `swtpm_setup`. A state already there is left alone."""
+    through `swtpm_setup`, replacing any state already there."""
     state_dir.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
@@ -163,7 +163,7 @@ def allocate_pcr_banks(state_dir: Path, banks: Iterable[str], log_f) -> None:
             str(state_dir),
             "--pcr-banks",
             ",".join(banks),
-            "--not-overwrite",
+            "--overwrite",
         ],
         stdout=log_f,
         stderr=subprocess.STDOUT,
@@ -181,9 +181,9 @@ def start_swtpm(
 ) -> subprocess.Popen:
     """Starts a TPM 2.0 emulator on a Unix socket and waits for the socket.
 
-    A `state_dir` without a state gets one with `pcr_banks` active first,
-    or swtpm's own full set when that is None. A state already there is
-    used as it is.
+    `state_dir` gets a fresh state with `pcr_banks` active first, or keeps
+    what it holds when that is None, which on an empty directory means
+    swtpm's own full set of banks.
 
     Errors go to stderr regardless of `--log`, so a log holding only
     `swtpm_setup`'s lines means a clean run. `DRTM_SWTPM_LOG_LEVEL` adds

@@ -114,16 +114,17 @@ The swtpm side:
 - `--tpm2` makes it a TPM 2.0, which has the DRTM PCRs 17 to 22 and the
     locality 4 start that resets them.
 - `--tpmstate dir=...` holds the NVRAM. The tests make a fresh one per boot,
-    `tb-boot` keeps one under `run/`.
+    `tb-boot` reseeds the one under `run/` on every start.
 - `--ctrl type=unixio,path=...` is the control socket. QEMU's `emulator`
     backend drives both the control and the data channel through it.
-- A fresh state is first given only the SHA-1 and SHA-256 banks, with
-    `swtpm_setup --tpm2 --pcr-banks sha1,sha256`. swtpm's default activates
-    every bank libtpms has, and the Linux launch then dies in the kernel's
-    late PCR extend: the SKL log carries one digest per bank a discrete TPM
-    ships with, and the kernel hands the TPM exactly those, which it
-    refuses with more banks active. A state `tb-boot` already has under
-    `run/` is kept as it is.
+- Every start begins with a state holding only the SHA-1 and SHA-256
+    banks, written by `swtpm_setup --tpm2 --pcr-banks sha1,sha256
+    --overwrite`. swtpm's default activates every bank libtpms has, and
+    the Linux launch then dies in the kernel's late PCR extend: the SKL
+    log carries one digest per bank a discrete TPM ships with, and the
+    kernel hands the TPM exactly those, which it refuses with more banks
+    active. Overwriting is what keeps a state from before this seeding, or
+    one swtpm wrote on its own, from coming back.
 
 ## Reading the traces
 
