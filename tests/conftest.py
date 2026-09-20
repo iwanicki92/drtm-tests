@@ -38,13 +38,20 @@ GUEST_MEM_GIB = 2
 class Entry:
     """One GRUB entry: its title, which OS it boots, whether through a
     launch, and under which firmware. `broken` names why it is not expected
-    to boot on this release."""
+    to boot on the pinned releases."""
 
     title: str
     os: str
     launch: bool
     firmware: str = "dasharo"
     broken: str | None = None
+
+    @property
+    def expected_broken(self) -> bool:
+        """Whether this run's image is one the entry is known not to boot
+        on: the pinned releases. A local build is usually there to test
+        a fix, so nothing is expected broken on it."""
+        return self.broken is not None and trenchboot.release() is not None
 
     @property
     def banner(self) -> str:
@@ -59,10 +66,11 @@ ENTRIES: dict[str, Entry] = {
     "xen_mb2_launch": Entry(
         "Boot Xen with TrenchBoot (MB2)", "xen", True, firmware="seabios"
     ),
-    # GRUB's EFI SKINIT setup reads the kernel's MLE header from the wrong
-    # offset, so SKL enters the kernel at startup_32, not sl_stub_entry. The
-    # kernel never learns of the launch, never executes STGI, and with GIF
-    # still clear its timer check panics. The legacy path below boots.
+    # The releases' GRUB reads the kernel's MLE header from the wrong offset
+    # in its EFI SKINIT setup, so SKL enters the kernel at startup_32, not
+    # sl_stub_entry. The kernel never learns of the launch, never executes
+    # STGI, and with GIF still clear its timer check panics. The legacy
+    # path below boots, and so does a build with the GRUB fix.
     "linux_launch": Entry(
         "Boot Linux with TrenchBoot",
         "linux",
@@ -165,7 +173,7 @@ def _boot(name: str, log_dir: Path) -> Boot:
             boot.securityfs = console.run("ls /sys/kernel/security/slaunch 2>&1")
             boot.console = vm.capture
     except Exception as e:
-        if entry.broken is None:
+        if not entry.expected_broken:
             raise
         boot.error = e
     return boot
@@ -208,7 +216,7 @@ SESSION = BootSession(
     workers=_workers,
     prepare=_prepare,
     check=_check,
-    header=lambda: [f"release:     {trenchboot.release()}"],
+    header=lambda: [f"image:       {trenchboot.description()}"],
 )
 
 
@@ -238,8 +246,9 @@ linux = _entry_fixture("linux")
 
 
 def broken(name: str):
-    """Marks a test of an entry known not to boot: it must fail, so the day
-    it passes is noticed."""
-    reason = ENTRIES[name].broken
-    assert reason is not None, f"{name} is not marked broken"
-    return pytest.mark.xfail(reason=reason, strict=True)
+    """Marks a test of an entry known not to boot on the releases: there it
+    must fail, so the day it passes is noticed. On a local image the mark
+    is inert and the test has to pass."""
+    entry = ENTRIES[name]
+    assert entry.broken is not None, f"{name} is not marked broken"
+    return pytest.mark.xfail(entry.expected_broken, reason=entry.broken, strict=True)

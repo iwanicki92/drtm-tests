@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""The Linux launch, which panics on this release under UEFI and boots
+"""The Linux launch, which panics on the releases under UEFI and boots
 through SeaBIOS, and the normal Linux boot: the kernel booted directly is
 the one that found no disk when the launch machine's IOMMU passed DMA
 through, so it stays under test."""

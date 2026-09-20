@@ -72,7 +72,7 @@ Once the shell answers, before the VM is torn down:
 Each run gets `logs/NNNN-YYYY-MM-DD/`, with one `boot-<fixture>/`
 directory per boot holding `serial.log`, `qemu.log` with the launch traces
 and guest errors (`qemu.md` says how to read them), `qemu-stderr.log`,
-`swtpm.log` and `qemu-args.txt`, and `results.txt` naming the release and
+`swtpm.log` and `qemu-args.txt`, and `results.txt` naming the image and
 summarising every test's outcome and duration. The first run on a machine
 also has `boot-warm-firmware/`, the boot that produced the warmed firmware
 image in `dl-cache/`.

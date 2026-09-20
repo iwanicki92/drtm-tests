@@ -31,6 +31,11 @@ The image is the newest meta-trenchboot release by default. Set
 one instead, a release candidate for instance. Each release keeps its own
 download and unpacked disk in `dl-cache/`.
 
+`DRTM_TB_IMAGE` boots a build of your own instead: the raw `.wic` bitbake
+deploys, read where it is. No entry is expected broken on it, since a local
+build is usually there to test a fix, so a test the releases only xfail has
+to pass. Set together with `DRTM_TB_RELEASE` it is refused.
+
 To boot the image by hand, with the serial console on stdio:
 
 ```sh
