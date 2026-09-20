@@ -123,10 +123,10 @@ lines, this being the Xen EFI launch:
 
 ```text
 x86_skinit cpu 0 slb 0x7e270000 entry 0x46 length 0x3440
-amd_drtm_launch SLB base 0x7e270000 length 13376
+amd_drtm_launch SLB base 0x7e270000 length 0x3440
 amd_drtm_unblock_dma sl_dev found 0
 amd_drtm_block_dma sl_dev base 0x7e270000 len 0x10000 enforced 1
-amd_drtm_hash SLB base 0x7e270000 length 13376: ok
+amd_drtm_hash SLB base 0x7e270000 length 0x3440: ok
 x86_vm_cr_write cpu 0 0x7 -> 0x3
 amd_drtm_dma_blocked sl_dev addr 0x7e27e480 size 8 write 0
 amd_drtm_dma_blocked sl_dev addr 0x7e27e488 size 8 write 0
