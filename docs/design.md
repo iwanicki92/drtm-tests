@@ -46,16 +46,19 @@ next prompt.
 
 Every GRUB entry is booted once per session, as many at a time as the CPUs
 and free memory allow, and the tests assert on what the boot gathered
-before the VM went away: the `query-amd-drtm` record, four PCRs, and the
+before the VM went away: the `query-amd-drtm` record, seven PCRs, and the
 `slaunch` lines from Xen's log, `dmesg` and securityfs.
 
 ## What is asserted
 
 A launch leaves the platform's record saying so, with the SLB hashed and
 SL_DEV released by the loader, and the DRTM PCRs reset by the locality 4
-start: 17 and 18 then extended, 19 left at zero since nothing on the AMD
-path extends it. A normal boot leaves no record and those PCRs at all
-ones, which is how a TPM 2.0 reports them until a launch resets them.
+start: 17 and 18 then extended, 19 to 22 left at zero since nothing on the
+AMD path extends them. PCR 18 must also differ from the value the PSP
+leaves when a launch fails after `SKINIT` and the DLME boots anyway, one
+all-ones extend into the reset value, which the plain "neither zero nor
+all ones" test would accept. A normal boot leaves no record and those PCRs
+at all ones, which is how a TPM 2.0 reports them until a launch resets them.
 
 Entries known not to boot on the pinned release are expected failures with
 the reason in the test, strictly, so the day one boots the run says so.

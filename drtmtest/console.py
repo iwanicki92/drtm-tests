@@ -105,8 +105,15 @@ class Console:
 
     def pcr(self, index: int) -> str:
         """One SHA-256 PCR as 64 hex digits, lower case."""
-        out = self.run(f"tpm2_pcrread sha256:{index}")
-        for found, value in _PCR_RE.findall(out):
-            if int(found) == index:
-                return value.lower()
-        raise LookupError(f"no PCR {index} in {out!r}")
+        return self.pcrs([index])[index]
+
+    def pcrs(self, indices: list[int]) -> dict[int, str]:
+        """SHA-256 PCRs by index, each as 64 hex digits, lower case, from
+        one read."""
+        selection = ",".join(str(i) for i in indices)
+        out = self.run(f"tpm2_pcrread sha256:{selection}")
+        found = {int(i): value.lower() for i, value in _PCR_RE.findall(out)}
+        missing = [i for i in indices if i not in found]
+        if missing:
+            raise LookupError(f"no PCR {missing} in {out!r}")
+        return {i: found[i] for i in indices}

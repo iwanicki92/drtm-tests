@@ -5,28 +5,34 @@
 """The Xen entries: a launch through SKINIT on the EFI path under Dasharo,
 its control boot without one, and the MB2 launch under SeaBIOS."""
 
-from conftest import PCR_ONES, PCR_ZERO, Boot
+from conftest import PCR_CAPPED, PCR_ONES, PCR_ZERO, Boot
+
+# What Xen prints while taking over from the loader, on hardware and here.
+XEN_RESERVES_EVENT_LOG = "SLAUNCH: reserving event log"
+XEN_RESERVES_SLB = "SLAUNCH: reserving SLB"
 
 
 def assert_launched(boot: Boot) -> None:
     """What every launch leaves: the platform's record of it, PCRs 17 and
-    18 reset and extended, and PCR 19 reset by the same locality 4 start
-    but extended by nothing on this path."""
+    18 reset and extended, PCR 18 not the cap a failed PSP launch leaves,
+    and PCR 19 to 22 reset by the same locality 4 start but extended by
+    nothing on this path."""
     assert boot.record["launched"] is True
     assert boot.record["hash"] == "ok"
     assert boot.record["slb-length"] > 0
     assert boot.record["sl-dev"] is False, "SKL should have released SL_DEV"
     assert boot.record["dma-blocks"] == []
     assert boot.pcrs[17] not in (PCR_ZERO, PCR_ONES), boot.pcrs
-    assert boot.pcrs[18] not in (PCR_ZERO, PCR_ONES), boot.pcrs
-    assert boot.pcrs[19] == PCR_ZERO, boot.pcrs
+    assert boot.pcrs[18] not in (PCR_ZERO, PCR_ONES, PCR_CAPPED), boot.pcrs
+    for index in range(19, 23):
+        assert boot.pcrs[index] == PCR_ZERO, boot.pcrs
 
 
 def assert_not_launched(boot: Boot) -> None:
     """Without a launch the DRTM PCRs stay as the TPM started them."""
     assert boot.record["launched"] is False
-    assert boot.pcrs[17] == PCR_ONES, boot.pcrs
-    assert boot.pcrs[19] == PCR_ONES, boot.pcrs
+    for index in range(17, 23):
+        assert boot.pcrs[index] == PCR_ONES, boot.pcrs
 
 
 def test_efi_launch_is_recorded_by_the_platform(xen_efi_launch: Boot):
@@ -34,7 +40,8 @@ def test_efi_launch_is_recorded_by_the_platform(xen_efi_launch: Boot):
 
 
 def test_efi_launch_is_seen_by_xen(xen_efi_launch: Boot):
-    assert "SLAUNCH" in xen_efi_launch.xen_lines, xen_efi_launch.xen_lines
+    assert XEN_RESERVES_EVENT_LOG in xen_efi_launch.xen_lines, xen_efi_launch.xen_lines
+    assert XEN_RESERVES_SLB in xen_efi_launch.xen_lines, xen_efi_launch.xen_lines
 
 
 def test_efi_normal_boot_launches_nothing(xen_efi: Boot):
@@ -47,4 +54,5 @@ def test_mb2_launch_is_recorded_by_the_platform(xen_mb2_launch: Boot):
 
 
 def test_mb2_launch_is_seen_by_xen(xen_mb2_launch: Boot):
-    assert "SLAUNCH" in xen_mb2_launch.xen_lines, xen_mb2_launch.xen_lines
+    assert XEN_RESERVES_EVENT_LOG in xen_mb2_launch.xen_lines, xen_mb2_launch.xen_lines
+    assert XEN_RESERVES_SLB in xen_mb2_launch.xen_lines, xen_mb2_launch.xen_lines

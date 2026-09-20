@@ -107,6 +107,11 @@ class Boot:
 PCR_ZERO = "0" * 64
 PCR_ONES = "f" * 64
 
+# The PSP DRTM service answers a launch that fails after SKINIT by capping
+# PCR 18 to 20 with one all-ones extend, and the DLME may still boot. This
+# is SHA-256(32 zero bytes || 32 0xff bytes), what such a PCR then reads.
+PCR_CAPPED = "bba91ca85dc914b2ec3efb9e16e7267bf9193b14350d20fba8a8b406730ae30a"
+
 
 def _warmed_firmware() -> Path:
     """The firmware after one boot to the GRUB menu, made on first use."""
@@ -144,7 +149,7 @@ def _boot(name: str, log_dir: Path) -> Boot:
             console.login()
             assert vm.qmp is not None
             boot.record = vm.qmp.execute("query-amd-drtm")
-            boot.pcrs = {i: console.pcr(i) for i in (16, 17, 18, 19)}
+            boot.pcrs = console.pcrs(list(range(16, 23)))
             if entry.os == "xen":
                 # For the log only: the console ring can lose early lines,
                 # so tests read Xen's lines off the serial capture instead.

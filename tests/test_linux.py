@@ -9,6 +9,11 @@ launch machine's IOMMU passed DMA through, so it stays under test."""
 from conftest import Boot, broken
 from test_xen import assert_launched, assert_not_launched
 
+# What the kernel prints on a launch it recognises, as seen on hardware:
+# the early setup in the decompressor's slaunch code, then the module.
+LINUX_SETUP_DONE = "slaunch: AMD SKINIT setup complete"
+LINUX_MODULE_UP = "slmodule: SKINIT Secure Launch module setup"
+
 
 @broken("linux_launch")
 def test_launch_is_recorded_by_the_platform(linux_launch: Boot):
@@ -17,7 +22,8 @@ def test_launch_is_recorded_by_the_platform(linux_launch: Boot):
 
 @broken("linux_launch")
 def test_launch_is_seen_by_linux(linux_launch: Boot):
-    assert "slaunch" in linux_launch.dmesg.lower(), linux_launch.dmesg
+    assert LINUX_SETUP_DONE in linux_launch.dmesg, linux_launch.dmesg
+    assert LINUX_MODULE_UP in linux_launch.dmesg, linux_launch.dmesg
     assert "No such file" not in linux_launch.securityfs, linux_launch.securityfs
 
 
