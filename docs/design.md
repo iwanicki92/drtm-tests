@@ -46,7 +46,7 @@ next prompt.
 
 Every GRUB entry is booted once per session, as many at a time as the CPUs
 and free memory allow, and the tests assert on what the boot gathered
-before the VM went away: the `query-amd-drtm` record, seven PCRs, and the
+before the VM went away: the `query-amd-drtm` record, the six DRTM PCRs, and the
 `slaunch` lines from Xen's log, `dmesg` and securityfs.
 
 ## What is asserted

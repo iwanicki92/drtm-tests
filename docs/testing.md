@@ -59,7 +59,7 @@ Once the shell answers, before the VM is torn down:
 
 - `query-amd-drtm` over QMP: `launched`, the hash verdict, the SLB length,
     whether SL_DEV is still held and which DMA blocks remain.
-- PCRs 16 to 22 from `tpm2_pcrread`, in one read.
+- PCRs 17 to 22 from `tpm2_pcrread`, in one read.
 - Xen's `slaunch` and `drtm` lines from `xl dmesg`, the same from `dmesg`,
     and the listing of `/sys/kernel/security/slaunch`.
 - The whole console capture. The Xen tests read the hypervisor's lines

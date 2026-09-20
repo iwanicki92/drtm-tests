@@ -149,7 +149,7 @@ def _boot(name: str, log_dir: Path) -> Boot:
             console.login()
             assert vm.qmp is not None
             boot.record = vm.qmp.execute("query-amd-drtm")
-            boot.pcrs = console.pcrs(list(range(16, 23)))
+            boot.pcrs = console.pcrs(list(range(17, 23)))
             if entry.os == "xen":
                 # For the log only: the console ring can lose early lines,
                 # so tests read Xen's lines off the serial capture instead.
