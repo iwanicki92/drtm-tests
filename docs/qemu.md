@@ -25,7 +25,12 @@ what a launch under it can do:
     layer, which has no RSA without one of them. A build with neither
     skips the check and reports the signature as `unsupported` in the
     launch record. The configure summary's `libgcrypt` and `nettle` lines
-    say which one a build has.
+    say which one a build has. Configure finds libgcrypt on its own,
+    and nettle if libgcrypt is missing, unless a gnutls development
+    package is installed: QEMU then takes gnutls for its crypto and
+    looks for neither, and gnutls has no RSA path for the check. On
+    such a host add `--enable-gcrypt`. The nettle path also needs
+    `libgmp-dev`, which its RSA support is built on.
 - `swtpm` and `swtpm-tools` at run time. The `emulator` backend is the
     only one carrying the locality 4 hash sequence, and the harness seeds
     each TPM state with `swtpm_setup`.
