@@ -59,11 +59,15 @@ ENTRIES: dict[str, Entry] = {
     "xen_mb2_launch": Entry(
         "Boot Xen with TrenchBoot (MB2)", "xen", True, firmware="seabios"
     ),
+    # GRUB's EFI SKINIT setup reads the kernel's MLE header from the wrong
+    # offset, so SKL enters the kernel at startup_32, not sl_stub_entry. The
+    # kernel never learns of the launch, never executes STGI, and with GIF
+    # still clear its timer check panics. The legacy path boots.
     "linux_launch": Entry(
         "Boot Linux with TrenchBoot",
         "linux",
         True,
-        broken="panics: timer doesn't work through Interrupt-remapped IO-APIC",
+        broken="panics in check_timer: SKL entered startup_32, GIF never set",
     ),
     # Booted as the Linux control and the warming boot. A kernel booted
     # directly is what an IOMMU passing DMA through breaks, Xen's dom0 not.
