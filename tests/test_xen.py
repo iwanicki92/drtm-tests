@@ -2,10 +2,10 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""The Xen entries: a launch through SKINIT on the EFI path, its control
-boot without one, and the MB2 launch that stops in SKL on this release."""
+"""The Xen entries: a launch through SKINIT on the EFI path under Dasharo,
+its control boot without one, and the MB2 launch under SeaBIOS."""
 
-from conftest import PCR_ONES, PCR_ZERO, Boot, broken
+from conftest import PCR_ONES, PCR_ZERO, Boot
 
 
 def assert_launched(boot: Boot) -> None:
@@ -42,6 +42,9 @@ def test_efi_normal_boot_launches_nothing(xen_efi: Boot):
     assert "SLAUNCH" not in xen_efi.xen_log, xen_efi.xen_log
 
 
-@broken("xen_mb2_launch")
 def test_mb2_launch_is_recorded_by_the_platform(xen_mb2_launch: Boot):
     assert_launched(xen_mb2_launch)
+
+
+def test_mb2_launch_is_seen_by_xen(xen_mb2_launch: Boot):
+    assert "SLAUNCH" in xen_mb2_launch.xen_log, xen_mb2_launch.xen_log

@@ -27,8 +27,9 @@ that matter, the shared part becomes a package both take.
 ## What a boot is
 
 One QEMU process on `-machine q35,smm=on,amd-drtm=on` with an `EPYC-Genoa`
-CPU, Dasharo's coreboot+UEFI build as flash, the image behind an IDE
-controller with `snapshot=on`, and an `swtpm` behind `tpm-tis`. Strict mode
+CPU, Dasharo's coreboot+UEFI build as flash or QEMU's SeaBIOS for the
+legacy entries, the image behind an IDE controller with `snapshot=on`, and
+an `swtpm` behind `tpm-tis`. Strict mode
 is on, so a launch rule the emulator would otherwise only log stops the VM
 as a panic, and the harness reports that within a second instead of at the
 timeout.

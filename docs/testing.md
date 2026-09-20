@@ -30,16 +30,20 @@ The image's GRUB menu lists six entries. Each has a fixture of the same
 name in `tests/conftest.py`, and a test takes the fixture of the boot it
 asserts on. Only entries a test names are booted, so a run boots four:
 the three launches and the Xen EFI control. One control is enough, and
-the other normal entries only serve the warming boot.
+the other normal entries only serve the warming boot and the menu check.
 
-| Fixture          | GRUB entry                       | On v0.5.2 here    |
-|------------------|----------------------------------|-------------------|
-| `xen_efi_launch` | Boot Xen with TrenchBoot (EFI)   | launches          |
-| `xen_efi`        | Boot Xen normally (EFI)          | boots, control    |
-| `linux_launch`   | Boot Linux with TrenchBoot       | kernel panic      |
-| `xen_mb2_launch` | Boot Xen with TrenchBoot (MB2)   | stops in SKL      |
-| `xen_mb2`        | Boot Xen normally (MB2)          | boots, not tested |
-| `linux`          | Boot Linux normally              | no disk, not used |
+The MB2 entries are legacy boots and run under QEMU's SeaBIOS, the way a
+BIOS board would run them. Under Dasharo's UEFI the MB2 launch runs SKL
+and then stops. The EFI entries and the Linux ones run under Dasharo.
+
+| Fixture          | GRUB entry                       | Firmware | On v0.5.2 here |
+|------------------|----------------------------------|----------|----------------|
+| `xen_efi_launch` | Boot Xen with TrenchBoot (EFI)   | Dasharo  | launches       |
+| `xen_efi`        | Boot Xen normally (EFI)          | Dasharo  | boots, control |
+| `xen_mb2_launch` | Boot Xen with TrenchBoot (MB2)   | SeaBIOS  | launches       |
+| `linux_launch`   | Boot Linux with TrenchBoot       | Dasharo  | kernel panic   |
+| `xen_mb2`        | Boot Xen normally (MB2)          | SeaBIOS  | not booted     |
+| `linux`          | Boot Linux normally              | Dasharo  | not booted     |
 
 Entries are selected by title from the menu GRUB draws, not by a fixed
 index, so a new entry in the image moves nothing here. The tests of an

@@ -41,12 +41,14 @@ GUEST_MEM_GIB = 2
 
 @dataclass(frozen=True)
 class Entry:
-    """One GRUB entry: its title, which OS it boots and whether through a
-    launch. `broken` names why it is not expected to boot on this release."""
+    """One GRUB entry: its title, which OS it boots, whether through a
+    launch, and under which firmware. `broken` names why it is not expected
+    to boot on this release."""
 
     title: str
     os: str
     launch: bool
+    firmware: str = "dasharo"
     broken: str | None = None
 
     @property
@@ -57,12 +59,10 @@ class Entry:
 ENTRIES: dict[str, Entry] = {
     "xen_efi_launch": Entry("Boot Xen with TrenchBoot (EFI)", "xen", True),
     "xen_efi": Entry("Boot Xen normally (EFI)", "xen", False),
+    # The MB2 entries are legacy boots: under UEFI the launch runs SKL and
+    # then stops, so they boot through SeaBIOS, the way a BIOS board would.
     "xen_mb2_launch": Entry(
-        "Boot Xen with TrenchBoot (MB2)",
-        "xen",
-        True,
-        broken="SKL ends with 'Bootloader shutdown EFI x64 boot services!' "
-        "and nothing follows",
+        "Boot Xen with TrenchBoot (MB2)", "xen", True, firmware="seabios"
     ),
     "linux_launch": Entry(
         "Boot Linux with TrenchBoot",
@@ -70,11 +70,9 @@ ENTRIES: dict[str, Entry] = {
         True,
         broken="panics: timer doesn't work through Interrupt-remapped IO-APIC",
     ),
-    # Listed for the menu check and the warming boot, not booted by a test.
-    # One control boot is enough and the Xen EFI one is it. The Linux
-    # kernel booted directly never attaches the IDE disk here, so its
-    # initramfs stops without a prompt.
-    "xen_mb2": Entry("Boot Xen normally (MB2)", "xen", False),
+    # Listed for the menu check and the warming boot, not booted by a test:
+    # one control boot is enough and the Xen EFI one is it.
+    "xen_mb2": Entry("Boot Xen normally (MB2)", "xen", False, firmware="seabios"),
     "linux": Entry("Boot Linux normally", "linux", False),
 }
 
@@ -173,12 +171,15 @@ def _boot(name: str) -> Boot:
     entry = ENTRIES[name]
     log_dir = _get_run_log_dir() / f"boot-{name.replace('_', '-')}"
     boot = Boot(entry, log_dir)
+    dasharo = entry.firmware == "dasharo"
     try:
         with QemuVm(
-            log_dir, firmware=warmed_firmware(), image=assets.unpacked_image()
+            log_dir,
+            firmware=warmed_firmware() if dasharo else None,
+            image=assets.unpacked_image(),
         ) as vm:
             console = Console(vm, BOOT_TIMEOUT)
-            boot.titles = console.select_entry(entry.title)
+            boot.titles = console.select_entry(entry.title, boot_prompt=dasharo)
             console.wait_for_login(entry.banner)
             console.login()
             assert vm.qmp is not None
@@ -235,7 +236,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     # Ahead of the pool: one unpack and one warming boot, which the workers
     # would otherwise queue up behind.
     assets.unpacked_image()
-    warmed_firmware()
+    if any(ENTRIES[name].firmware == "dasharo" for name in first_wanted):
+        warmed_firmware()
     global _boot_pool
     _boot_pool = ThreadPoolExecutor(_workers(), thread_name_prefix="boot")
     for name in sorted(first_wanted, key=first_wanted.__getitem__):

@@ -244,14 +244,16 @@ class QemuVm:
     block, and `expect` waits on it from a cursor that advances with every
     match, so one prompt seen twice is two matches.
 
-    `save_firmware_to` keeps the firmware copy after a clean exit, which is
-    how the warmed image is made.
+    `firmware` is the flash image to boot, copied per boot so the guest's
+    writes to its variable store land on the copy, or `None` for QEMU's own
+    SeaBIOS. `save_firmware_to` keeps that copy after a clean exit, which
+    is how the warmed image is made.
     """
 
     def __init__(
         self,
         log_dir: Path,
-        firmware: Path,
+        firmware: Path | None,
         image: Path,
         cpu: str = DEFAULT_CPU,
         smp: int = DEFAULT_SMP,
@@ -260,7 +262,7 @@ class QemuVm:
         save_firmware_to: Path | None = None,
     ):
         self.log_dir = Path(log_dir)
-        self.firmware = Path(firmware)
+        self.firmware = Path(firmware) if firmware is not None else None
         self.image = Path(image)
         self.cpu = cpu
         self.smp = smp
@@ -292,10 +294,12 @@ class QemuVm:
         self._files = [serial_log, qemu_out, swtpm_log]
         self._serial_log = serial_log
 
-        # The variable store lives in this image, so each boot gets a copy.
-        firmware = Path(self._workdir) / "firmware.rom"
-        shutil.copy(self.firmware, firmware)
-        self._firmware_copy = firmware
+        firmware: Path | None = None
+        if self.firmware is not None:
+            # The variable store lives in this image, so each boot gets a copy.
+            firmware = Path(self._workdir) / "firmware.rom"
+            shutil.copy(self.firmware, firmware)
+            self._firmware_copy = firmware
 
         self._swtpm_sock = _short_socket_path("tbtest-swtpm-")
         self._swtpm = start_swtpm(

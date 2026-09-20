@@ -66,14 +66,16 @@ class Console:
     boot_timeout: float
     command_timeout: float = 60.0
 
-    def select_entry(self, title: str) -> list[str]:
+    def select_entry(self, title: str, boot_prompt: bool = True) -> list[str]:
         """Answers the firmware, then picks `title` in GRUB's menu.
 
-        The index comes from the titles the menu shows, so the image decides
-        where an entry sits. Returns the titles for the record.
+        `boot_prompt` is Dasharo's, which SeaBIOS never shows. The index
+        comes from the titles the menu shows, so the image decides where
+        an entry sits. Returns the titles for the record.
         """
-        self.vm.expect(BOOT_PROMPT, self.boot_timeout)
-        self.vm.send(b"\r")
+        if boot_prompt:
+            self.vm.expect(BOOT_PROMPT, self.boot_timeout)
+            self.vm.send(b"\r")
         menu = self.vm.expect(MENU_READY, self.boot_timeout)
         titles = menu_titles(menu)
         if title not in titles:
