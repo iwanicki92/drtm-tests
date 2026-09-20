@@ -200,10 +200,30 @@ or starts the AP. Two events are absent from a healthy boot of this image:
 
 ## A broken rule
 
-A rule violation writes the rule twice: as a `guest_errors` line and as
-`amd_drtm_guest_error <rule> (strict 1)`. With strict mode on the VM then
-stops, `query-status` answers `guest-panicked`, and the harness raises
-`GuestPanicked` for that boot. The rules are:
+Every line below goes to the one log file `-D` names, or to stderr
+without `-D`. A rule violation produces up to four of them there, from
+two sources. The first two are the same text through two channels: the
+plain line is the guest-error log, which `-d guest_errors` enables, and
+the `amd_drtm_guest_error` line is the trace, which `-trace 'amd_drtm_*'`
+enables, with the strict setting appended. Either option alone gives one
+of the two. The last two come from QEMU's panic path and appear only with
+strict mode on, and only through `-d guest_errors`:
+
+```text
+amd-drtm: SKINIT with no TPM to measure the SLB at 0x100000, PCR 17 stays unmeasured
+amd_drtm_guest_error amd-drtm: SKINIT with no TPM to measure the SLB at 0x100000, PCR 17 stays unmeasured (strict 1)
+Guest crashed
+AMD dynamic launch rule broken: amd-drtm: SKINIT with no TPM to measure the SLB at 0x100000, PCR 17 stays unmeasured
+```
+
+With strict mode on the VM stops in the `guest-panicked` run state and a
+`GUEST_PANICKED` QMP event carries the rule. What happens next is QEMU's
+`-action panic=` setting: the default is `shutdown`, so QEMU then exits
+with status 0 and the harness reports the boot as QEMU having exited,
+quoting the log's tail. `-action panic=pause` keeps the stopped VM alive
+instead, so `query-amd-drtm` and `query-status` can still be asked.
+
+The rules are:
 
 - `SKINIT` with no TPM to measure the SLB.
 - An SLB that is not readable memory.
