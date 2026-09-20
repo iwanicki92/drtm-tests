@@ -29,10 +29,10 @@ that matter, the shared part becomes a package both take.
 One QEMU process on `-machine q35,smm=on,amd-drtm=on` with an `EPYC-Genoa`
 CPU, Dasharo's coreboot+UEFI build as flash or QEMU's SeaBIOS for the
 legacy entries, the image behind an IDE controller with `snapshot=on`, and
-an `swtpm` behind `tpm-tis`. Strict mode
-is on, so a launch rule the emulator would otherwise only log stops the VM
-as a panic, and the harness reports that within a second instead of at the
-timeout.
+an `swtpm` behind `tpm-tis`. Strict mode is on, so a launch rule the
+emulator would otherwise only log stops the VM as a panic, and the panic
+action is set to pause so the stopped VM stays for the harness to see,
+which reports it within a second instead of at the timeout.
 
 The serial console is the only way in. A reader thread drains it into
 `serial.log` for the life of the boot, and the driver waits for prompts

@@ -141,6 +141,10 @@ def qemu_args(
         mem,
         "-global",
         f"amd-drtm-platform.strict={'on' if strict else 'off'}",
+        # A strict stop leaves the VM paused rather than exiting, so the run
+        # state names the rule and the launch record can still be queried.
+        "-action",
+        "panic=pause",
         "-chardev",
         f"socket,id=chrtpm,path={swtpm_sock}",
         "-tpmdev",
@@ -385,9 +389,9 @@ class QemuVm:
     def _check_alive(self) -> None:
         """Raises if QEMU is gone or the VM stopped as panicked.
 
-        Strict mode stops the VM through the panic path, which leaves the
-        process running and the console silent, so the run state is what
-        says a launch rule broke. Polled at most once a second.
+        Strict mode stops the VM through the panic path, and `-action
+        panic=pause` keeps the process alive and the console silent, so the
+        run state is what says a launch rule broke. Polled once a second.
         """
         assert self._process is not None
         if self._process.poll() is not None:

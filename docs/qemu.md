@@ -29,6 +29,7 @@ qemu-system-x86_64 \
     -global q35-pcihost.mch-multifunction=on \
     -global q35-pcihost.cf8-extended-config=on \
     -device amd-drtm-platform,strict=on \
+    -action panic=pause \
     -device amd-nb,bus=pcie.0,addr=18.0 \
     -device AMDVI-PCI,id=amd-drtm-iommu,bus=pcie.0,addr=0.2 \
     -device amd-iommu,pci-id=amd-drtm-iommu,firmware-enabled=on,dma-remap=on \
@@ -90,6 +91,7 @@ through `SKINIT` and no boot here uses them.
 | `-global q35-pcihost.mch-multifunction=on`                                 | Marks the host bridge at 00:00.0 multifunction, without which nothing enumerates the IOMMU at function 2 of the same slot.                                                                                                                                                                                                                                                                                                                                  |
 | `-global q35-pcihost.cf8-extended-config=on`                               | Decodes AMD's extended register bits in port `0xcf8`, which is how SKL reaches MEMPROT_CR at offset 0x384, beyond the 256 bytes conventional configuration space covers.                                                                                                                                                                                                                                                                                    |
 | `-device amd-drtm-platform,strict=on`                                      | The device that keeps the state of a launch. When a CPU executes `SKINIT` it records the SLB, hashes it into PCR 17 through the TPM and blocks device DMA to it, and it is what `query-amd-drtm` reads. Without it `SKINIT` is an undefined opcode, as upstream. `strict=on` turns a broken launch rule into a VM stop in the `guest-panicked` state, so the harness sees a failed boot rather than a logged line. `--no-strict` in `tb-boot` turns it off. |
+| `-action panic=pause`                                                      | What QEMU does after a strict stop. The default, `shutdown`, exits the process, which would turn a broken rule into "QEMU exited". Pausing keeps the stopped VM, so `query-status` names the stop and `query-amd-drtm` still answers.                                                                                                                                                                                                                       |
 | `-device amd-nb,bus=pcie.0,addr=18.0`                                      | The northbridge PCI function at 00:18.0, where AMD firmware and SKL expect it. It carries the MEMPROT_CR register. After the launch, SKL clears the enable bit in that register to release SL_DEV, and the northbridge reports the write to the platform device, which then lifts the DMA block.                                                                                                                                                            |
 | `-device AMDVI-PCI,id=amd-drtm-iommu,bus=pcie.0,addr=0.2`                  | The IOMMU's PCI function at 00:00.2, its usual place on AMD. Given an id so the IOMMU proper can be tied to it.                                                                                                                                                                                                                                                                                                                                             |
 | `-device amd-iommu,pci-id=amd-drtm-iommu,firmware-enabled=on,dma-remap=on` | The IOMMU itself, bound to that function. `firmware-enabled` leaves it enabled as firmware would, which SKL relies on. `dma-remap` makes it translate rather than pass DMA through, which a Linux booted directly needs to find its disk. Its `ivrs` default publishes the IVRS table.                                                                                                                                                                      |
@@ -218,10 +220,11 @@ AMD dynamic launch rule broken: amd-drtm: SKINIT with no TPM to measure the SLB 
 
 With strict mode on the VM stops in the `guest-panicked` run state and a
 `GUEST_PANICKED` QMP event carries the rule. What happens next is QEMU's
-`-action panic=` setting: the default is `shutdown`, so QEMU then exits
-with status 0 and the harness reports the boot as QEMU having exited,
-quoting the log's tail. `-action panic=pause` keeps the stopped VM alive
-instead, so `query-amd-drtm` and `query-status` can still be asked.
+`-action panic=` setting. The default is `shutdown`, under which QEMU then
+exits with status 0. The harness passes `pause`, so the stopped VM stays,
+`query-status` answers `guest-panicked` and the boot fails with that
+reason, and `query-amd-drtm` can still be asked what the launch looked
+like.
 
 The rules are:
 
