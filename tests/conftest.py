@@ -33,6 +33,10 @@ BOOT_TIMEOUT = 420.0
 # and it is what lets six boots share a 16 GB host.
 GUEST_MEM_GIB = 2
 
+# Whether the boots get the Secure Processor's DRTM service, and whether
+# the image's SKL is expected to use it: `None`, "on" or "classic".
+PSP = machine.psp_mode()
+
 
 @dataclass(frozen=True)
 class Entry:
@@ -47,11 +51,30 @@ class Entry:
     broken: str | None = None
 
     @property
-    def expected_broken(self) -> bool:
-        """Whether this run's image is one the entry is known not to boot
-        on: the pinned releases. A local build is usually there to test
-        a fix, so nothing is expected broken on it."""
-        return self.broken is not None and trenchboot.release() is not None
+    def broken_reason(self) -> str | None:
+        """Why this session is not expected to boot the entry, or `None`
+        when it should. The pinned releases carry known breakage, and a
+        local build is usually there to test a fix, so nothing is expected
+        broken on one. An image without legacy boot code cannot boot the
+        SeaBIOS entries. Under the service with a classic SKL every launch
+        is expected to fail: neither its GRUB nor the SKL talks to the
+        service, so the TPM localities the SKL and the OS extend through
+        stay locked, and only the service's LAUNCH would open them. Under the
+        service with the AMDSL SKL the Linux launch fails after it: the
+        kernel walks the PCI devices for the PSP in setup_arch(), before
+        any is enumerated, so it never learns of the service, never
+        releases the TMR, and its disk stays behind it."""
+        if self.firmware == "seabios" and not trenchboot.legacy_bootable():
+            return (
+                "the image has no legacy boot code, its wic carries the EFI boot alone"
+            )
+        if PSP == "classic" and self.launch:
+            return "classic SKL: no LAUNCH, so the PSP's locality locks stay on the TPM"
+        if PSP == "on" and self.launch and self.os == "linux":
+            return "the kernel looks for the PSP before PCI enumeration, never releases the TMR, and its disk stays behind it"
+        if self.broken is not None and trenchboot.release() is not None:
+            return self.broken
+        return None
 
     @property
     def banner(self) -> str:
@@ -154,7 +177,7 @@ def _boot(name: str, log_dir: Path) -> Boot:
     try:
         with QemuVm(
             log_dir,
-            machine.options(trenchboot.unpacked_image()),
+            machine.options(trenchboot.unpacked_image(), psp=PSP is not None),
             firmware=_warmed_firmware() if dasharo else None,
             tpm="tis",
         ) as vm:
@@ -173,7 +196,7 @@ def _boot(name: str, log_dir: Path) -> Boot:
             boot.securityfs = console.run("ls /sys/kernel/security/slaunch 2>&1")
             boot.console = vm.capture
     except Exception as e:
-        if not entry.expected_broken:
+        if entry.broken_reason is None:
             raise
         boot.error = e
     return boot
@@ -216,7 +239,10 @@ SESSION = BootSession(
     workers=_workers,
     prepare=_prepare,
     check=_check,
-    header=lambda: [f"image:       {trenchboot.description()}"],
+    header=lambda: [
+        f"image:       {trenchboot.description()}",
+        f"psp:         {PSP or 'off'}",
+    ],
 )
 
 
@@ -245,10 +271,10 @@ linux_legacy_launch = _entry_fixture("linux_legacy_launch")
 linux = _entry_fixture("linux")
 
 
-def broken(name: str):
-    """Marks a test of an entry known not to boot on the releases: there it
-    must fail, so the day it passes is noticed. On a local image the mark
-    is inert and the test has to pass."""
-    entry = ENTRIES[name]
-    assert entry.broken is not None, f"{name} is not marked broken"
-    return pytest.mark.xfail(entry.expected_broken, reason=entry.broken, strict=True)
+def expects_boot(name: str):
+    """Marks a test that needs its entry to boot. Where this session is
+    known not to boot the entry, the test must fail, so the day it passes
+    is noticed. Everywhere else the mark is inert and the test has to
+    pass."""
+    reason = ENTRIES[name].broken_reason
+    return pytest.mark.xfail(reason is not None, reason=reason or "", strict=True)

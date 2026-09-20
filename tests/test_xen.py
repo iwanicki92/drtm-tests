@@ -5,18 +5,29 @@
 """The Xen entries: a launch through SKINIT on the EFI path under Dasharo,
 its control boot without one, and the MB2 launch under SeaBIOS."""
 
-from conftest import PCR_CAPPED, PCR_ONES, PCR_ZERO, Boot
+from conftest import PCR_CAPPED, PCR_ONES, PCR_ZERO, PSP, Boot, expects_boot
 
 # What Xen prints while taking over from the loader, on hardware and here.
 XEN_RESERVES_EVENT_LOG = "SLAUNCH: reserving event log"
 XEN_RESERVES_SLB = "SLAUNCH: reserving SLB"
+
+# What Xen's PSP driver prints: the launch it found the service made, and
+# the TMR it releases once its IOMMU is programmed.
+XEN_PSP_LAUNCH = "SLAUNCH: PSP-assisted launch"
+XEN_RELEASES_TMR = "SLAUNCH: released TMR 0"
+
+# The service's DRTM_CMD_TMR_RELEASE, the last command a boot through the
+# service issues before the shell.
+PSP_CMD_TMR_RELEASE = 3
 
 
 def assert_launched(boot: Boot) -> None:
     """What every launch leaves: the platform's record of it, PCRs 17 and
     18 reset and extended, PCR 18 not the cap a failed PSP launch leaves,
     and PCR 19 to 22 reset by the same locality 4 start but extended by
-    nothing on this path."""
+    nothing on this path. Under the service, its own record too: kicked,
+    the launch passed with the SKL's signature checked, and the TMR
+    released as the last command."""
     assert boot.record["launched"] is True
     assert boot.record["hash"] == "ok"
     assert boot.record["slb-length"] > 0
@@ -26,6 +37,28 @@ def assert_launched(boot: Boot) -> None:
     assert boot.pcrs[18] not in (PCR_ZERO, PCR_ONES, PCR_CAPPED), boot.pcrs
     for index in range(19, 23):
         assert boot.pcrs[index] == PCR_ZERO, boot.pcrs
+    if PSP is None:
+        assert "psp" not in boot.record, boot.record
+        return
+    psp = boot.record["psp"]
+    assert psp["kicked"] is True, psp
+    assert psp["launch"] == "ok", psp
+    # A QEMU built without gcrypt cannot check the signature and says so.
+    assert psp["signature"] in ("verified", "unsupported"), psp
+    assert psp["command"] == PSP_CMD_TMR_RELEASE, psp
+    assert psp["status"] == 0, psp
+
+
+def assert_seen_by_xen(boot: Boot) -> None:
+    """Xen's own view of the launch, and of the service when it is there:
+    the PSP driver reports the launch and releases the TMR."""
+    assert XEN_RESERVES_EVENT_LOG in boot.xen_lines, boot.xen_lines
+    assert XEN_RESERVES_SLB in boot.xen_lines, boot.xen_lines
+    if PSP is None:
+        assert XEN_PSP_LAUNCH not in boot.xen_lines, boot.xen_lines
+        return
+    assert XEN_PSP_LAUNCH in boot.xen_lines, boot.xen_lines
+    assert XEN_RELEASES_TMR in boot.xen_lines, boot.xen_lines
 
 
 def assert_not_launched(boot: Boot) -> None:
@@ -35,13 +68,14 @@ def assert_not_launched(boot: Boot) -> None:
         assert boot.pcrs[index] == PCR_ONES, boot.pcrs
 
 
+@expects_boot("xen_efi_launch")
 def test_efi_launch_is_recorded_by_the_platform(xen_efi_launch: Boot):
     assert_launched(xen_efi_launch)
 
 
+@expects_boot("xen_efi_launch")
 def test_efi_launch_is_seen_by_xen(xen_efi_launch: Boot):
-    assert XEN_RESERVES_EVENT_LOG in xen_efi_launch.xen_lines, xen_efi_launch.xen_lines
-    assert XEN_RESERVES_SLB in xen_efi_launch.xen_lines, xen_efi_launch.xen_lines
+    assert_seen_by_xen(xen_efi_launch)
 
 
 def test_efi_normal_boot_launches_nothing(xen_efi: Boot):
@@ -49,10 +83,11 @@ def test_efi_normal_boot_launches_nothing(xen_efi: Boot):
     assert "SLAUNCH" not in xen_efi.xen_lines, xen_efi.xen_lines
 
 
+@expects_boot("xen_mb2_launch")
 def test_mb2_launch_is_recorded_by_the_platform(xen_mb2_launch: Boot):
     assert_launched(xen_mb2_launch)
 
 
+@expects_boot("xen_mb2_launch")
 def test_mb2_launch_is_seen_by_xen(xen_mb2_launch: Boot):
-    assert XEN_RESERVES_EVENT_LOG in xen_mb2_launch.xen_lines, xen_mb2_launch.xen_lines
-    assert XEN_RESERVES_SLB in xen_mb2_launch.xen_lines, xen_mb2_launch.xen_lines
+    assert_seen_by_xen(xen_mb2_launch)

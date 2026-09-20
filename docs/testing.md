@@ -49,16 +49,46 @@ and then stops. The EFI entries and the Linux ones run under Dasharo.
 
 Entries are selected by title from the menu GRUB draws, not by a fixed
 index, so a new entry in the image moves nothing here. The tests of an
-entry marked broken are strict expected failures: they must fail, and a
-pass is reported as a failure so the change is noticed and the mark
-removed.
+entry the session is known not to boot are strict expected failures: they
+must fail, and a pass is reported as a failure so the change is noticed
+and the expectation removed. `Entry.broken_reason` in `tests/conftest.py`
+decides, from the release, the image and `DRTM_PSP`.
+
+### Under the PSP
+
+`DRTM_PSP=on` boots everything with the Secure Processor's DRTM service,
+for an image built with the `AMDSL` SKL. `DRTM_PSP=classic` is the same
+service under a release or the classic SKL, which never talk to it and
+extend into locked localities. The README says what the service does.
+What each session expects:
+
+| Fixture               | `DRTM_PSP=on`, `AMDSL` image      | `DRTM_PSP=classic`, classic image |
+|-----------------------|-----------------------------------|-----------------------------------|
+| `xen_efi_launch`      | PSP-assisted launch, TMR released | boots, PCRs not extended          |
+| `xen_efi`             | boots, control                    | boots, control                    |
+| `xen_mb2_launch`      | no legacy boot code, see below    | boots, PCRs not extended          |
+| `linux_launch`        | launches, then no disk, see below | boots, PCRs not extended          |
+| `linux_legacy_launch` | no legacy boot code, see below    | boots, PCRs not extended          |
+| `linux`               | boots, control                    | boots, control                    |
+
+Two of those are findings rather than choices. The `AMDSL` build's wic
+carries the EFI boot alone, with a stub in the master boot record that
+boots nothing, so the SeaBIOS entries cannot start on it. The harness
+reads the record and expects them broken on any such image. And the
+kernel of that build walks the PCI devices for the PSP in `setup_arch()`,
+before any is enumerated, so it never learns of the service. It boots
+through the launch, but it never releases the TMR GRUB set up over all
+of memory, its disk's DMA stays blocked, and it stops at the missing root.
 
 ## What a boot gathers
 
 Once the shell answers, before the VM is torn down:
 
 - `query-amd-drtm` over QMP: `launched`, the hash verdict, the SLB length,
-    whether SL_DEV is still held and which DMA blocks remain.
+    whether SL_DEV is still held and which DMA blocks remain, and with the
+    service its `psp` record: whether it was kicked, what its `LAUNCH`
+    decided, what it found of the SKL's signature, and the last command
+    with its status.
 - PCRs 17 to 22 from `tpm2_pcrread`, in one read.
 - Xen's `slaunch` and `drtm` lines from `xl dmesg`, the same from `dmesg`,
     and the listing of `/sys/kernel/security/slaunch`.

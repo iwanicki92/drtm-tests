@@ -5,7 +5,7 @@
 """`tb-boot`: the same boot as the tests, by hand, with the console on stdio.
 
     tb-boot [-f dasharo|seabios] [-m MEM] [-s SMP] [-w] [-n] [--no-strict]
-            [-- QEMU ARGS]
+            [--psp] [-- QEMU ARGS]
     tb-boot query          query-amd-drtm on the running instance
 
 Ctrl-A x quits, Ctrl-A c switches to the monitor. The firmware copy, the
@@ -62,6 +62,12 @@ def main() -> int:
     parser.add_argument(
         "--no-strict", action="store_true", help="log broken rules only"
     )
+    parser.add_argument(
+        "--psp",
+        action="store_true",
+        default=machine.psp_mode() is not None,
+        help="add the Secure Processor with its DRTM service, as DRTM_PSP does",
+    )
     parser.add_argument("rest", nargs="*", help="'query', or QEMU arguments after --")
     opts = parser.parse_args()
 
@@ -97,6 +103,7 @@ def main() -> int:
             mem=opts.mem,
             strict=not opts.no_strict,
             snapshot=not opts.writable,
+            psp=opts.psp,
         ),
         *tpm_args(str(swtpm_sock)),
         *qmp_args(str(qmp_sock)),

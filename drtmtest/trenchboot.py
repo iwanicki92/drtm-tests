@@ -78,6 +78,14 @@ def image() -> Asset:
     return RELEASES[tag]
 
 
+def legacy_bootable() -> bool:
+    """Whether the image boots under a BIOS: its master boot record carries
+    GRUB's boot code, which names itself in its error strings. A wic built
+    with the EFI plugin alone has a stub there that boots nothing."""
+    with open(unpacked_image(), "rb") as f:
+        return b"GRUB" in f.read(446)
+
+
 def unpacked_image() -> Path:
     """The image as a raw disk, unpacked beside its download on first use.
 

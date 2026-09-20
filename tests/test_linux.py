@@ -7,7 +7,7 @@ through SeaBIOS, and the normal Linux boot: the kernel booted directly is
 the one that found no disk when the launch machine's IOMMU passed DMA
 through, so it stays under test."""
 
-from conftest import Boot, broken
+from conftest import Boot, expects_boot
 from test_xen import assert_launched, assert_not_launched
 
 # What the kernel prints on a launch it recognises, as seen on hardware:
@@ -16,22 +16,24 @@ LINUX_SETUP_DONE = "slaunch: AMD SKINIT setup complete"
 LINUX_MODULE_UP = "slmodule: SKINIT Secure Launch module setup"
 
 
-@broken("linux_launch")
+@expects_boot("linux_launch")
 def test_launch_is_recorded_by_the_platform(linux_launch: Boot):
     assert_launched(linux_launch)
 
 
-@broken("linux_launch")
+@expects_boot("linux_launch")
 def test_launch_is_seen_by_linux(linux_launch: Boot):
     assert LINUX_SETUP_DONE in linux_launch.dmesg, linux_launch.dmesg
     assert LINUX_MODULE_UP in linux_launch.dmesg, linux_launch.dmesg
     assert "No such file" not in linux_launch.securityfs, linux_launch.securityfs
 
 
+@expects_boot("linux_legacy_launch")
 def test_legacy_launch_is_recorded_by_the_platform(linux_legacy_launch: Boot):
     assert_launched(linux_legacy_launch)
 
 
+@expects_boot("linux_legacy_launch")
 def test_legacy_launch_is_seen_by_linux(linux_legacy_launch: Boot):
     boot = linux_legacy_launch
     assert LINUX_SETUP_DONE in boot.dmesg, boot.dmesg
