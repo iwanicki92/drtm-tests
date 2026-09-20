@@ -2,9 +2,10 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""The Linux launch, which panics on this release, and the normal Linux
-boot: the kernel booted directly is the one that found no disk when the
-launch machine's IOMMU passed DMA through, so it stays under test."""
+"""The Linux launch, which panics on this release under UEFI and boots
+through SeaBIOS, and the normal Linux boot: the kernel booted directly is
+the one that found no disk when the launch machine's IOMMU passed DMA
+through, so it stays under test."""
 
 from conftest import Boot, broken
 from test_xen import assert_launched, assert_not_launched
@@ -25,6 +26,17 @@ def test_launch_is_seen_by_linux(linux_launch: Boot):
     assert LINUX_SETUP_DONE in linux_launch.dmesg, linux_launch.dmesg
     assert LINUX_MODULE_UP in linux_launch.dmesg, linux_launch.dmesg
     assert "No such file" not in linux_launch.securityfs, linux_launch.securityfs
+
+
+def test_legacy_launch_is_recorded_by_the_platform(linux_legacy_launch: Boot):
+    assert_launched(linux_legacy_launch)
+
+
+def test_legacy_launch_is_seen_by_linux(linux_legacy_launch: Boot):
+    boot = linux_legacy_launch
+    assert LINUX_SETUP_DONE in boot.dmesg, boot.dmesg
+    assert LINUX_MODULE_UP in boot.dmesg, boot.dmesg
+    assert "No such file" not in boot.securityfs, boot.securityfs
 
 
 def test_normal_boot_launches_nothing(linux: Boot):

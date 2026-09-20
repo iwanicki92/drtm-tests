@@ -62,12 +62,15 @@ ENTRIES: dict[str, Entry] = {
     # GRUB's EFI SKINIT setup reads the kernel's MLE header from the wrong
     # offset, so SKL enters the kernel at startup_32, not sl_stub_entry. The
     # kernel never learns of the launch, never executes STGI, and with GIF
-    # still clear its timer check panics. The legacy path boots.
+    # still clear its timer check panics. The legacy path below boots.
     "linux_launch": Entry(
         "Boot Linux with TrenchBoot",
         "linux",
         True,
         broken="panics in check_timer: SKL entered startup_32, GIF never set",
+    ),
+    "linux_legacy_launch": Entry(
+        "Boot Linux with TrenchBoot", "linux", True, firmware="seabios"
     ),
     # Booted as the Linux control and the warming boot. A kernel booted
     # directly is what an IOMMU passing DMA through breaks, Xen's dom0 not.
@@ -158,7 +161,7 @@ def _boot(name: str, log_dir: Path) -> Boot:
                 # For the log only: the console ring can lose early lines,
                 # so tests read Xen's lines off the serial capture instead.
                 boot.xen_log = console.run("xl dmesg | grep -i -E 'slaunch|drtm'")
-            boot.dmesg = console.run("dmesg | grep -i -E 'slaunch|drtm'")
+            boot.dmesg = console.run("dmesg | grep -i -E 'slaunch|slmodule|drtm'")
             boot.securityfs = console.run("ls /sys/kernel/security/slaunch 2>&1")
             boot.console = vm.capture
     except Exception as e:
@@ -230,6 +233,7 @@ xen_efi = _entry_fixture("xen_efi")
 xen_mb2_launch = _entry_fixture("xen_mb2_launch")
 xen_mb2 = _entry_fixture("xen_mb2")
 linux_launch = _entry_fixture("linux_launch")
+linux_legacy_launch = _entry_fixture("linux_legacy_launch")
 linux = _entry_fixture("linux")
 
 

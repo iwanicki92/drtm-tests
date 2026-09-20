@@ -117,6 +117,13 @@ The swtpm side:
     `tb-boot` keeps one under `run/`.
 - `--ctrl type=unixio,path=...` is the control socket. QEMU's `emulator`
     backend drives both the control and the data channel through it.
+- A fresh state is first given only the SHA-1 and SHA-256 banks, through
+    a throwaway swtpm that takes `TPM2_PCR_Allocate` before any firmware
+    has run. swtpm's default activates every bank libtpms has, and the
+    Linux launch then dies in the kernel's late PCR extend: the SKL log
+    carries one digest per bank a discrete TPM ships with, and the kernel
+    hands the TPM exactly those, which it refuses with more banks active.
+    A state `tb-boot` already has under `run/` is kept as it is.
 
 ## Reading the traces
 
