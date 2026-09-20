@@ -20,17 +20,17 @@ build wants a C toolchain, `ninja-build`, `pkg-config`, Python 3 with
 `tomli`, `libglib2.0-dev` and `libpixman-1-dev`. Two more things decide
 what a launch under it can do:
 
-- `libgcrypt20-dev` or `nettle-dev` at build time. The PSP DRTM service
-    verifies the SKL's RSA-PSS signature at `LAUNCH` through QEMU's crypto
-    layer, which has no RSA without one of them. A build with neither
-    skips the check and reports the signature as `unsupported` in the
-    launch record. The configure summary's `libgcrypt` and `nettle` lines
-    say which one a build has. Configure finds libgcrypt on its own,
-    and nettle if libgcrypt is missing, unless a gnutls development
-    package is installed: QEMU then takes gnutls for its crypto and
-    looks for neither, and gnutls has no RSA path for the check. On
-    such a host add `--enable-gcrypt`. The nettle path also needs
-    `libgmp-dev`, which its RSA support is built on.
+- `libgcrypt20-dev` at build time. The PSP DRTM service verifies the
+    SKL's RSA-PSS signature at `LAUNCH` through QEMU's crypto layer,
+    which has RSA only from libgcrypt or from nettle with `libgmp-dev`.
+    A build with neither skips the check and reports the signature as
+    `unsupported` in the launch record. The configure line below asks
+    for libgcrypt outright, so configure fails rather than quietly
+    building without it. Left on its own, configure takes gnutls for
+    crypto whenever its development package is installed and probes
+    for neither of the two, and gnutls has no RSA path for the check.
+    The configure summary's `libgcrypt` and `nettle` lines say which
+    one a build has.
 - `swtpm` and `swtpm-tools` at run time. The `emulator` backend is the
     only one carrying the locality 4 hash sequence, and the harness seeds
     each TPM state with `swtpm_setup`.
@@ -39,7 +39,8 @@ The configure line the suite is developed against, from an empty `build`
 directory inside the tree:
 
 ```sh
-../configure --target-list=x86_64-softmmu --enable-tpm --disable-docs
+../configure --target-list=x86_64-softmmu --enable-tpm --enable-gcrypt \
+    --disable-docs
 ninja qemu-system-x86_64
 ```
 

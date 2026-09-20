@@ -20,8 +20,8 @@ needs that build. Point `DRTM_QEMU_BINARY` at it.
 - The `drtm` branch of QEMU, built for `x86_64-softmmu` with
     `--enable-tpm`. Its build wants a C toolchain, `ninja-build`,
     `pkg-config`, Python 3 with `tomli`, `libglib2.0-dev` and
-    `libpixman-1-dev`, plus `libgcrypt20-dev` or `nettle-dev` for the RSA
-    behind the PSP path's signature check. Without one of those two the
+    `libpixman-1-dev`, plus `libgcrypt20-dev` for the RSA behind the PSP
+    path's signature check. Without it, or nettle in its place, the
     build still runs, and the check is skipped and reported as
     `unsupported`. [Building the `drtm`
     branch](docs/qemu.md#building-the-drtm-branch) has the configure
