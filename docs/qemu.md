@@ -161,9 +161,12 @@ In the order they appear:
     TPM at locality 4, which reset PCRs 17 to 22 and extended 17. `failed`
     means the SLB was not readable memory, `unsupported` a TPM with no
     locality 4 path or none at all. PCR 17 then stays at all ones.
-- `x86_vm_cr_write cpu 0 0x7 -> 0x3`: `SKINIT` sets DPD, R_INIT and
-    DIS_A20M in VM_CR, bits 0 to 2. SKL clears DIS_A20M first. Bit 3 is
-    LOCK and bit 4 SVMDIS, neither touched on this path.
+- `x86_vm_cr_write cpu 0 0x7 -> 0x3`: a write to the VM_CR MSR by CPU 0,
+    shown as the value before the write, then the value after it. The
+    bits are DPD (bit 0), R_INIT (bit 1), DIS_A20M (bit 2), LOCK (bit 3)
+    and SVMDIS (bit 4). `SKINIT` set the first three, hence 0x7, and this
+    write clears bit 2: SKL turns DIS_A20M off first thing. LOCK and
+    SVMDIS are never touched on this path.
 - `amd_drtm_dma_blocked sl_dev ...`: SKL programmed the IOMMU with its
     command buffer and event log inside the SLB, and the IOMMU's own fetches
     hit the block. Reads (`write 0`) are command fetches, writes (`write 1`)
@@ -177,12 +180,14 @@ In the order they appear:
     active launch. `launched 0` here breaks a rule, see below.
 - `amd_drtm_unblock_dma sl_dev found 1`: the block came off, and
     `query-amd-drtm` reports `sl-dev` false and `dma-blocks` empty.
-- `x86_vm_cr_write cpu 0 0x3 -> 0x1`: the kernel cleared R_INIT before
-    starting the APs. INIT is a normal INIT again from here.
+- `x86_vm_cr_write cpu 0 0x3 -> 0x1`: the kernel cleared R_INIT, bit 1,
+    before starting the APs, leaving only DPD. INIT is a normal INIT again
+    from here.
 - `x86_sipi_after_launch cpu 1`: the AP's first SIPI after the launch, and
     it starts as the APM says, with GIF clear and the three VM_CR bits
     set.
-- `x86_vm_cr_write cpu 1 0x7 -> 0x5`: the AP clears its own R_INIT.
+- `x86_vm_cr_write cpu 1 0x7 -> 0x5`: the AP clears its own R_INIT, from
+    all three bits set to DPD and DIS_A20M.
 
 The MB2 launch reads the same apart from the addresses. The Linux launch
 stops after the unblock, since the kernel panics before it clears R_INIT
