@@ -15,6 +15,23 @@ Upstream QEMU raises `#UD` on `SKINIT`. The `drtm` branch of our QEMU
 tree adds the launch machine, `-machine q35,amd-drtm=on`, and this suite
 needs that build. Point `DRTM_QEMU_BINARY` at it.
 
+## Requirements
+
+- The `drtm` branch of QEMU, built for `x86_64-softmmu` with
+    `--enable-tpm`. Its build wants a C toolchain, `ninja-build`,
+    `pkg-config`, Python 3 with `tomli`, `libglib2.0-dev` and
+    `libpixman-1-dev`, plus `libgcrypt20-dev` or `nettle-dev` for the RSA
+    behind the PSP path's signature check. Without one of those two the
+    build still runs, and the check is skipped and reported as
+    `unsupported`. `docs/qemu.md`, "Building the `drtm` branch", has the
+    configure line.
+- `swtpm` and `swtpm-tools` on `PATH`. The `emulator` backend is the only
+    one carrying the locality 4 hash sequence, and every boot seeds a
+    fresh TPM state with `swtpm_setup`.
+- `uv`, which installs the Python side on the first run.
+- About 1.5 GB under `dl-cache/` for the firmware and the unpacked image,
+    and under a megabyte of logs per run.
+
 ## Running
 
 ```sh
