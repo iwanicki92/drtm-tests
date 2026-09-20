@@ -98,6 +98,14 @@ class Boot:
     console: str = ""
     error: Exception | None = None
 
+    @property
+    def xen_lines(self) -> str:
+        """What the hypervisor printed on the serial console, the lines
+        tagged "(XEN)", with or without a timestamp after the tag."""
+        return "\n".join(
+            line for line in self.console.splitlines() if line.startswith("(XEN)")
+        )
+
 
 # A TPM 2.0 reports the DRTM PCRs, 17 to 22, as all ones from startup
 # until a locality 4 start resets them to zero, which only a launch does.
@@ -188,6 +196,8 @@ def _boot(name: str) -> Boot:
             boot.record = vm.qmp.execute("query-amd-drtm")
             boot.pcrs = {i: console.pcr(i) for i in (16, 17, 18, 19)}
             if entry.os == "xen":
+                # For the log only: the console ring can lose early lines,
+                # so tests read Xen's lines off the serial capture instead.
                 boot.xen_log = console.run("xl dmesg | grep -i -E 'slaunch|drtm'")
             boot.dmesg = console.run("dmesg | grep -i -E 'slaunch|drtm'")
             boot.securityfs = console.run("ls /sys/kernel/security/slaunch 2>&1")

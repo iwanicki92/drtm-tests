@@ -62,7 +62,10 @@ Once the shell answers, before the VM is torn down:
 - PCRs 16 to 19 from `tpm2_pcrread`.
 - Xen's `slaunch` and `drtm` lines from `xl dmesg`, the same from `dmesg`,
     and the listing of `/sys/kernel/security/slaunch`.
-- The whole console capture.
+- The whole console capture. The Xen tests read the hypervisor's lines
+    off it, the ones tagged `(XEN)`, rather than off `xl dmesg`: the
+    console ring is small and a verbose boot pushes the early lines out
+    of it, while the serial output keeps them.
 
 ## Logs
 

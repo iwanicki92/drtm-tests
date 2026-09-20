@@ -34,12 +34,12 @@ def test_efi_launch_is_recorded_by_the_platform(xen_efi_launch: Boot):
 
 
 def test_efi_launch_is_seen_by_xen(xen_efi_launch: Boot):
-    assert "SLAUNCH" in xen_efi_launch.xen_log, xen_efi_launch.xen_log
+    assert "SLAUNCH" in xen_efi_launch.xen_lines, xen_efi_launch.xen_lines
 
 
 def test_efi_normal_boot_launches_nothing(xen_efi: Boot):
     assert_not_launched(xen_efi)
-    assert "SLAUNCH" not in xen_efi.xen_log, xen_efi.xen_log
+    assert "SLAUNCH" not in xen_efi.xen_lines, xen_efi.xen_lines
 
 
 def test_mb2_launch_is_recorded_by_the_platform(xen_mb2_launch: Boot):
@@ -47,4 +47,4 @@ def test_mb2_launch_is_recorded_by_the_platform(xen_mb2_launch: Boot):
 
 
 def test_mb2_launch_is_seen_by_xen(xen_mb2_launch: Boot):
-    assert "SLAUNCH" in xen_mb2_launch.xen_log, xen_mb2_launch.xen_log
+    assert "SLAUNCH" in xen_mb2_launch.xen_lines, xen_mb2_launch.xen_lines
