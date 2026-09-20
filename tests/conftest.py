@@ -70,10 +70,12 @@ ENTRIES: dict[str, Entry] = {
         True,
         broken="panics: timer doesn't work through Interrupt-remapped IO-APIC",
     ),
-    # Listed for the menu check and the warming boot, not booted by a test:
-    # one control boot is enough and the Xen EFI one is it.
-    "xen_mb2": Entry("Boot Xen normally (MB2)", "xen", False, firmware="seabios"),
+    # Booted as the Linux control and the warming boot. A kernel booted
+    # directly is what an IOMMU passing DMA through breaks, Xen's dom0 not.
     "linux": Entry("Boot Linux normally", "linux", False),
+    # Listed for the menu check, not booted by a test: its EFI twin is the
+    # Xen control.
+    "xen_mb2": Entry("Boot Xen normally (MB2)", "xen", False, firmware="seabios"),
 }
 
 

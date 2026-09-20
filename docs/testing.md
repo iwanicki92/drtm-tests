@@ -28,9 +28,11 @@ in flight before the first assertion.
 
 The image's GRUB menu lists six entries. Each has a fixture of the same
 name in `tests/conftest.py`, and a test takes the fixture of the boot it
-asserts on. Only entries a test names are booted, so a run boots four:
-the three launches and the Xen EFI control. One control is enough, and
-the other normal entries only serve the warming boot and the menu check.
+asserts on. Only entries a test names are booted, so a run boots five:
+the three launches, the Xen EFI control and the Linux control. The Linux
+one is kept because a kernel booted directly is what an IOMMU that passes
+DMA through breaks, while Xen's dom0 never notices. The normal MB2 entry
+only serves the menu check.
 
 The MB2 entries are legacy boots and run under QEMU's SeaBIOS, the way a
 BIOS board would run them. Under Dasharo's UEFI the MB2 launch runs SKL
@@ -42,8 +44,8 @@ and then stops. The EFI entries and the Linux ones run under Dasharo.
 | `xen_efi`        | Boot Xen normally (EFI)          | Dasharo  | boots, control |
 | `xen_mb2_launch` | Boot Xen with TrenchBoot (MB2)   | SeaBIOS  | launches       |
 | `linux_launch`   | Boot Linux with TrenchBoot       | Dasharo  | kernel panic   |
+| `linux`          | Boot Linux normally              | Dasharo  | boots, control |
 | `xen_mb2`        | Boot Xen normally (MB2)          | SeaBIOS  | not booted     |
-| `linux`          | Boot Linux normally              | Dasharo  | not booted     |
 
 Entries are selected by title from the menu GRUB draws, not by a fixed
 index, so a new entry in the image moves nothing here. The tests of an
