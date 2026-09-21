@@ -101,12 +101,16 @@ in the TPM's order. Its own measurements carry SHA-1 and SHA-256 where
 the TPM has them and the placeholder elsewhere, extended into that bank
 as well, so a TPM with SHA-256 alone or with SHA-384 on top boots Linux
 and replays too. `DRTM_PCR_BANKS` sets the banks of the fresh TPM state
-to try that. Two limits remain. `SKINIT`'s record gets the placeholder
+to try that. One limit remains: `SKINIT`'s record gets the placeholder
 in a bank the SKL cannot hash for, though the launch measured the SLB
-into that bank, so its replay is not expected to match. And Xen's
-legacy path logs one PCR 18 event against a one-bank header with a
-digest the TPM did not get, so that replay misses on `sha256` alone.
-The harness replays SHA-256 only.
+into that bank, so its replay is not expected to match. Xen's legacy
+path had one of its own. Its early code lets the TPM hash the multiboot
+information and copies back the digests, which the TPM returns for
+every hash it implements, SHA-1 first, and the copy stopped at the
+first one the log did not declare. With no SHA-1 bank the PCR 18 event
+kept the placeholder in SHA-256 and the replay missed on `sha256`
+alone. The image's Xen carries a patch that skips such digests, which
+the next build has to confirm. The harness replays SHA-256 only.
 
 The first `AMDSL` build taught the harness two things. Its wic carried
 the EFI boot alone, with a stub in the master boot record that boots
