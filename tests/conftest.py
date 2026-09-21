@@ -131,7 +131,7 @@ class Boot:
 
     `eventlog` is the DRTM event log as dumped from the guest, `slb_length`
     and `slb_sha256` the SLB header's length and the digest of that many
-    bytes of the image's `skl.bin`, both gathered on launches only.
+    bytes of the SKL the image booted, both gathered on launches only.
     `iommu` is what the OS says of its IOMMU: Xen's `virt_caps`, or the
     kernel's iommu class and groups. `cmdline` is Linux's `/proc/cmdline`.
     """
@@ -231,13 +231,13 @@ def _event_log(console: Console, entry: Entry, capture: str) -> bytes:
 
 def _slb(console: Console) -> tuple[int, str]:
     """The SLB header's length field and the SHA-256 of that many bytes of
-    the SKL the image ships, what SKINIT measures."""
-    header = console.run("xxd -p -s 2 -l 2 /boot/skl.bin")
+    the SKL the image booted, what SKINIT measures. An image with both
+    builds boots the AMDSL one under the service."""
+    skl = "/boot/skl-amdsl.bin" if PSP == "on" else "/boot/skl.bin"
+    header = console.run(f"xxd -p -s 2 -l 2 {skl}")
     length = int.from_bytes(bytes.fromhex(header), "little")
     # BusyBox head has no -c, dd reads the same bytes.
-    digest = console.run(
-        f"dd if=/boot/skl.bin bs={length} count=1 2>/dev/null | sha256sum"
-    )
+    digest = console.run(f"dd if={skl} bs={length} count=1 2>/dev/null | sha256sum")
     return length, digest.split()[0]
 
 

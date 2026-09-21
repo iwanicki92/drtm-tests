@@ -154,8 +154,9 @@ Once the shell answers, before the VM is torn down:
     console: Linux exposes it at `/sys/kernel/security/slaunch/eventlog`,
     and under Xen dom0 reads the range Xen's "reserving event log" line
     names out of `/dev/mem`. With it, the length field of the SLB header
-    of the image's `/boot/skl.bin` and the SHA-256 of that many bytes of
-    it, what `SKINIT` measures.
+    of the SKL the boot ran, `/boot/skl.bin` or under the service
+    `/boot/skl-amdsl.bin`, and the SHA-256 of that many bytes of it, what
+    `SKINIT` measures.
 - The whole console capture. The Xen tests read the hypervisor's lines
     off it, the ones tagged `(XEN)`, rather than off `xl dmesg`: the
     console ring is small and a verbose boot pushes the early lines out
