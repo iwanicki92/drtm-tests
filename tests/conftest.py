@@ -369,15 +369,3 @@ def expects_boot(name: str):
     pass."""
     reason = ENTRIES[name].broken_reason
     return pytest.mark.xfail(reason is not None, reason=reason or "", strict=True)
-
-
-# The SKL's log has the SKL's extends. Under the service the PSP extends
-# PCR 17 and 18 too, at its LAUNCH and at the SKL's request, and logs
-# them in a log of its own that nothing fetches, so the replay of the
-# SKL's log alone cannot reach the PCRs. Strict, so an image that merges
-# the two logs is noticed.
-replays_without_psp = pytest.mark.xfail(
-    PSP == "on",
-    reason="the PSP's extends are in its own log, which the SKL's does not carry",
-    strict=True,
-)

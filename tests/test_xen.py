@@ -14,7 +14,6 @@ from conftest import (
     PSP,
     Boot,
     expects_boot,
-    replays_without_psp,
 )
 
 from drtmtest.eventlog import EV_SLAUNCH, replay
@@ -121,7 +120,6 @@ def test_efi_launch_brings_the_iommu_up(xen_efi_launch: Boot):
     assert_iommu_up(xen_efi_launch)
 
 
-@replays_without_psp
 @expects_boot("xen_efi_launch")
 def test_efi_launch_log_replays_to_the_pcrs(xen_efi_launch: Boot):
     assert_log_replays(xen_efi_launch)
@@ -147,7 +145,6 @@ def test_mb2_launch_brings_the_iommu_up(xen_mb2_launch: Boot):
     assert_iommu_up(xen_mb2_launch)
 
 
-@replays_without_psp
 @expects_boot("xen_mb2_launch")
 def test_mb2_launch_log_replays_to_the_pcrs(xen_mb2_launch: Boot):
     assert_log_replays(xen_mb2_launch)

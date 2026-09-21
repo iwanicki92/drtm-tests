@@ -7,7 +7,7 @@ through SeaBIOS, and the normal Linux boot: the kernel booted directly is
 the one that found no disk when the launch machine's IOMMU passed DMA
 through, so it stays under test."""
 
-from conftest import Boot, expects_boot, replays_without_psp
+from conftest import Boot, expects_boot
 from test_xen import (
     assert_iommu_up,
     assert_launched,
@@ -44,7 +44,6 @@ def test_launch_brings_the_iommu_up(linux_launch: Boot):
     assert_iommu_up(linux_launch)
 
 
-@replays_without_psp
 @expects_boot("linux_launch")
 def test_launch_log_replays_to_the_pcrs(linux_launch: Boot):
     assert_log_replays(linux_launch)
@@ -65,7 +64,6 @@ def test_legacy_launch_brings_the_iommu_up(linux_legacy_launch: Boot):
     assert_iommu_up(linux_legacy_launch)
 
 
-@replays_without_psp
 @expects_boot("linux_legacy_launch")
 def test_legacy_launch_log_replays_to_the_pcrs(linux_legacy_launch: Boot):
     assert_log_replays(linux_legacy_launch)
@@ -82,7 +80,6 @@ def test_alt_launch_is_seen_by_linux(linux_alt_launch: Boot):
     assert "drtmtest=alt" in linux_alt_launch.cmdline, linux_alt_launch.cmdline
 
 
-@replays_without_psp
 @expects_boot("linux_alt_launch")
 def test_alt_launch_log_replays_to_the_pcrs(linux_alt_launch: Boot):
     assert_log_replays(linux_alt_launch)

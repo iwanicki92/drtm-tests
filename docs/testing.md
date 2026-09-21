@@ -82,16 +82,19 @@ What each session expects:
 | `linux_alt_launch`    | PSP-assisted launch, TMR released | boots, PCRs not extended          |
 | `linux`               | boots, control                    | boots, control                    |
 
-The event log replay is a strict expected failure under `DRTM_PSP=on`:
-the service extends PCR 17 and 18 too, at its `LAUNCH` and at the SKL's
-request, and logs those in a log of its own that `GET_TCG_LOGS` hands out
-and nothing in the image fetches. The SKL's log alone cannot reach the
-PCRs there: the `AMDSL` SKL's log opens with `SKINIT` and goes straight
-to the OS's events, the DLME measurement having gone to the service. The
-day an image merges the two, the run says so. The fork's `AMDSL` SKL has
-since learnt to fetch the service's log after the OSSL extend and append
-its records to its own, all but the `SKINIT` one it logged already, and
-the mark goes once an image carrying that has run.
+Under `DRTM_PSP=on` the service extends PCR 17 and 18 too, at its
+`LAUNCH` and at the SKL's request, and logs those in a log of its own
+that `GET_TCG_LOGS` hands out. The `AMDSL` SKL fetches it after the OSSL
+extend and appends its records to its own log, all but the `SKINIT` one
+it logged already, so the log carries every extend and replays to the
+PCRs like the classic SKL's. The service logs the SHA-256 bank alone and
+the SKL's log has two, so each appended record gets the TCG placeholder
+digest, a one then zeros, in its SHA-1 bank, and the SKL extends the
+SHA-1 bank of that PCR with it. Linux resets on a record that does not
+carry every bank the header declares, and again on a header that does
+not declare every bank the TPM has, which rules out one-bank records and
+a one-bank header. An image whose SKL does not merge the two logs fails
+the five replay tests under the service.
 
 The first `AMDSL` build taught the harness two things. Its wic carried
 the EFI boot alone, with a stub in the master boot record that boots
@@ -172,7 +175,9 @@ brackets its own measurements with two such tags on PCR 17, and a replay
 that extends them lands off the TPM's value. The image's own
 `anti-evil-maid-dump-evt-log`, in v0.5.3-rc1 onwards, replays them and
 so agrees with the TPM under Xen only. An event carrying one bank's
-digest, as the service's SHA-256 extends do, counts for that bank alone.
+digest counts for that bank alone. The placeholder SHA-1 the `AMDSL` SKL
+logs for the service's records replays like any other digest, since the
+SKL extended the PCR with it.
 
 The launch tests check that the log opens with `SKINIT`'s event on
 PCR 17, whose digest is the SLB's, that the platform's record has the
