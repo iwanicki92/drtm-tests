@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from drtmtest.eventlog import EV_NO_ACTION, EV_SLAUNCH, parse, replay
+from drtmtest.eventlog import EV_NO_ACTION, EV_SLAUNCH, Event, parse, replay
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -74,15 +74,21 @@ def test_the_linux_log_has_the_kernels_tags():
 
 @pytest.mark.parametrize("alg", ["sha256", "sha1"])
 @pytest.mark.parametrize("pcr", [17, 18])
-def test_the_linux_log_replays_to_the_pcrs_with_the_tags_skipped(
-    alg: str, pcr: int
-):
+def test_the_linux_log_replays_to_the_pcrs_with_the_tags_skipped(alg: str, pcr: int):
     assert replay(parse(fixture("linux")), pcr, alg) == LINUX_PCRS[alg][pcr]
 
 
 def test_the_zero_tail_of_the_log_region_is_not_an_event():
     raw = fixture("linux")
     assert parse(raw + bytes(4096)) == parse(raw)
+
+
+def test_an_event_without_the_bank_leaves_that_banks_replay_alone():
+    events = parse(fixture("xen"))
+    first = events[0]
+    sha256_only = Event(17, 0x8002, {"sha256": "11" * 32}, b"")
+    assert replay([first, sha256_only], 17, "sha1") == replay([first], 17, "sha1")
+    assert replay([first, sha256_only], 17) != replay([first], 17)
 
 
 def test_an_empty_or_foreign_buffer_is_refused():

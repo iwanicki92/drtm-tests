@@ -88,7 +88,10 @@ request, and logs those in a log of its own that `GET_TCG_LOGS` hands out
 and nothing in the image fetches. The SKL's log alone cannot reach the
 PCRs there: the `AMDSL` SKL's log opens with `SKINIT` and goes straight
 to the OS's events, the DLME measurement having gone to the service. The
-day an image merges the two, the run says so.
+day an image merges the two, the run says so. The fork's `AMDSL` SKL has
+since learnt to fetch the service's log after the OSSL extend and append
+its records to its own, all but the `SKINIT` one it logged already, and
+the mark goes once an image carrying that has run.
 
 The first `AMDSL` build taught the harness two things. Its wic carried
 the EFI boot alone, with a stub in the master boot record that boots
@@ -167,7 +170,8 @@ events are logged but not extended, which matters on Linux: the kernel
 brackets its own measurements with two such tags on PCR 17, and a replay
 that extends them lands off the TPM's value. The image's own
 `anti-evil-maid-dump-evt-log`, in v0.5.3-rc1 onwards, replays them and
-so agrees with the TPM under Xen only.
+so agrees with the TPM under Xen only. An event carrying one bank's
+digest, as the service's SHA-256 extends do, counts for that bank alone.
 
 The launch tests check that the log opens with `SKINIT`'s event on
 PCR 17, whose digest is the SLB's, that the platform's record has the

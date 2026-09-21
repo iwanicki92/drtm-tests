@@ -76,9 +76,10 @@ def parse(raw: bytes) -> list[Event]:
 def replay(events: list[Event], pcr: int, alg: str = "sha256") -> str:
     """What `pcr` reads after the extends the log records, from the zero
     a locality 4 start leaves. EV_NO_ACTION events are logged, not
-    extended."""
+    extended, and an event without a digest in `alg` extended another
+    bank alone, as the PSP's SHA-256 extends do."""
     value = bytes(hashlib.new(alg).digest_size)
     for event in events:
-        if event.pcr == pcr and event.type != EV_NO_ACTION:
+        if event.pcr == pcr and event.type != EV_NO_ACTION and alg in event.digests:
             value = hashlib.new(alg, value + bytes.fromhex(event.digests[alg])).digest()
     return value.hex()
