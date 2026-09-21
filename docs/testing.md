@@ -109,8 +109,9 @@ information and copies back the digests, which the TPM returns for
 every hash it implements, SHA-1 first, and the copy stopped at the
 first one the log did not declare. With no SHA-1 bank the PCR 18 event
 kept the placeholder in SHA-256 and the replay missed on `sha256`
-alone. The image's Xen carries a patch that skips such digests, which
-the next build has to confirm. The harness replays SHA-256 only.
+alone. The image's Xen carries a patch that skips such digests, and the
+replay matches with SHA-256 alone since. The harness replays SHA-256
+only.
 
 The first `AMDSL` build taught the harness two things. Its wic carried
 the EFI boot alone, with a stub in the master boot record that boots
