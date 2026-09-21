@@ -5,7 +5,19 @@
 """The Xen entries: a launch through SKINIT on the EFI path under Dasharo,
 its control boot without one, and the MB2 launch under SeaBIOS."""
 
-from conftest import PCR_CAPPED, PCR_ONES, PCR_ZERO, PSP, Boot, expects_boot
+import re
+
+from conftest import (
+    PCR_CAPPED,
+    PCR_ONES,
+    PCR_ZERO,
+    PSP,
+    Boot,
+    expects_boot,
+    replays_without_psp,
+)
+
+from drtmtest.eventlog import EV_SLAUNCH, replay
 
 # What Xen prints while taking over from the loader, on hardware and here.
 XEN_RESERVES_EVENT_LOG = "SLAUNCH: reserving event log"
@@ -61,6 +73,32 @@ def assert_seen_by_xen(boot: Boot) -> None:
     assert XEN_RELEASES_TMR in boot.xen_lines, boot.xen_lines
 
 
+def assert_log_replays(boot: Boot) -> None:
+    """The event log the SKL left accounts for the DRTM PCRs: it opens
+    with SKINIT's measurement of the SLB, which is the digest of the SKL
+    the image ships over the length its header gives, and replaying its
+    extends reaches what the TPM reads for PCR 17 and 18."""
+    events = boot.events
+    assert events, "no event log was dumped"
+    first = events[0]
+    assert (first.pcr, first.type, first.data) == (17, EV_SLAUNCH, b"SKINIT"), first
+    assert first.digests["sha256"] == boot.slb_sha256, (first, boot.slb_sha256)
+    assert boot.record["slb-length"] == boot.slb_length, boot.record
+    for pcr in (17, 18):
+        assert replay(events, pcr) == boot.pcrs[pcr], (pcr, events)
+
+
+def assert_iommu_up(boot: Boot) -> None:
+    """The launched OS brought the IOMMU up: Xen reports direct I/O among
+    its capabilities, Linux has the AMD IOMMU registered and devices in
+    its groups."""
+    if boot.entry.os == "xen":
+        assert "hvm_directio" in boot.iommu, boot.iommu
+    else:
+        assert "ivhd0" in boot.iommu, boot.iommu
+        assert re.search(r"iommu_groups:\n\s*\d", boot.iommu), boot.iommu
+
+
 def assert_not_launched(boot: Boot) -> None:
     """Without a launch the DRTM PCRs stay as the TPM started them."""
     assert boot.record["launched"] is False
@@ -78,6 +116,17 @@ def test_efi_launch_is_seen_by_xen(xen_efi_launch: Boot):
     assert_seen_by_xen(xen_efi_launch)
 
 
+@expects_boot("xen_efi_launch")
+def test_efi_launch_brings_the_iommu_up(xen_efi_launch: Boot):
+    assert_iommu_up(xen_efi_launch)
+
+
+@replays_without_psp
+@expects_boot("xen_efi_launch")
+def test_efi_launch_log_replays_to_the_pcrs(xen_efi_launch: Boot):
+    assert_log_replays(xen_efi_launch)
+
+
 def test_efi_normal_boot_launches_nothing(xen_efi: Boot):
     assert_not_launched(xen_efi)
     assert "SLAUNCH" not in xen_efi.xen_lines, xen_efi.xen_lines
@@ -91,3 +140,14 @@ def test_mb2_launch_is_recorded_by_the_platform(xen_mb2_launch: Boot):
 @expects_boot("xen_mb2_launch")
 def test_mb2_launch_is_seen_by_xen(xen_mb2_launch: Boot):
     assert_seen_by_xen(xen_mb2_launch)
+
+
+@expects_boot("xen_mb2_launch")
+def test_mb2_launch_brings_the_iommu_up(xen_mb2_launch: Boot):
+    assert_iommu_up(xen_mb2_launch)
+
+
+@replays_without_psp
+@expects_boot("xen_mb2_launch")
+def test_mb2_launch_log_replays_to_the_pcrs(xen_mb2_launch: Boot):
+    assert_log_replays(xen_mb2_launch)

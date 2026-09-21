@@ -9,7 +9,8 @@ SPDX-License-Identifier: BSD-3-Clause
 Boots the [meta-trenchboot](https://github.com/zarhus/meta-trenchboot)
 image under a QEMU that runs AMD's `SKINIT`, one boot per GRUB entry, and
 checks what each launch leaves behind: the emulator's launch record, the
-TPM's PCRs and what Xen or Linux say about it.
+TPM's PCRs, the event log that has to replay to them, and what Xen or
+Linux say about it.
 
 Upstream QEMU raises `#UD` on `SKINIT`. The `drtm` branch of our QEMU
 tree adds the launch machine, `-machine q35,amd-drtm=on`, and this suite

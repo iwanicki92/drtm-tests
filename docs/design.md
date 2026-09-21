@@ -61,6 +61,17 @@ all-ones extend into the reset value, which the plain "neither zero nor
 all ones" test would accept. A normal boot leaves no record and those PCRs
 at all ones, which is how a TPM 2.0 reports them until a launch resets them.
 
+The PCRs alone say a launch happened, not what was measured. The event
+log the SKL leaves says that, so a launch also has to replay: its first
+event is `SKINIT`'s measurement of the SLB, and that digest has to be the
+digest of the SKL the image ships over the length its header gives, and
+the extends the log records have to reach the PCR 17 and 18 the TPM
+reads. Where an image offers a second launch differing in the kernel
+command line alone, PCR 17 has to stay and PCR 18 has to move, so the
+measurement is shown to cover what it claims. And the launched OS has to
+have its IOMMU up: the DLME released SL_DEV, and what keeps device DMA
+out of the launched kernel from then on is the IOMMU.
+
 Entries known not to boot on the pinned release are expected failures with
 the reason in the test, strictly, so the day one boots the run says so.
 

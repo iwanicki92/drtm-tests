@@ -12,6 +12,7 @@ memory allow, so a fixture is usually just waiting on a boot in flight.
 """
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,6 +21,7 @@ import pytest
 from drtmtest import machine, trenchboot
 from drtmtest.console import LINUX_BANNER, XEN_BANNER, Console
 from drtmtest.dasharo import FIRMWARE, warmed_firmware
+from drtmtest.eventlog import Event, parse
 from drtmtest.qemu_vm import QemuVm
 from drtmtest.session import BootSession
 
@@ -42,13 +44,15 @@ PSP = machine.psp_mode()
 class Entry:
     """One GRUB entry: its title, which OS it boots, whether through a
     launch, and under which firmware. `broken` names why it is not expected
-    to boot on the pinned releases."""
+    to boot on the pinned releases. An `optional` entry is one only some
+    images carry, and its tests skip where the menu lacks it."""
 
     title: str
     os: str
     launch: bool
     firmware: str = "dasharo"
     broken: str | None = None
+    optional: bool = False
 
     @property
     def broken_reason(self) -> str | None:
@@ -97,6 +101,17 @@ ENTRIES: dict[str, Entry] = {
     "linux_legacy_launch": Entry(
         "Boot Linux with TrenchBoot", "linux", True, firmware="seabios"
     ),
+    # The Linux launch with one more kernel parameter, which the fork's
+    # images carry and the releases do not. The SKL measures the command
+    # line into PCR 18, so this launch must differ from the plain one
+    # there and nowhere else.
+    "linux_alt_launch": Entry(
+        "Boot Linux with TrenchBoot (alt)",
+        "linux",
+        True,
+        firmware="seabios",
+        optional=True,
+    ),
     # Booted as the Linux control and the warming boot. A kernel booted
     # directly is what an IOMMU passing DMA through breaks, Xen's dom0 not.
     "linux": Entry("Boot Linux normally", "linux", False),
@@ -111,7 +126,14 @@ class Boot:
     """What one boot left behind, gathered before the VM is torn down.
 
     `error` holds why a boot known to be broken did not get there, and is
-    `None` for one that reached the shell.
+    `None` for one that reached the shell. `skipped` says why an optional
+    entry was not booted at all.
+
+    `eventlog` is the DRTM event log as dumped from the guest, `slb_length`
+    and `slb_sha256` the SLB header's length and the digest of that many
+    bytes of the image's `skl.bin`, both gathered on launches only.
+    `iommu` is what the OS says of its IOMMU: Xen's `virt_caps`, or the
+    kernel's iommu class and groups. `cmdline` is Linux's `/proc/cmdline`.
     """
 
     entry: Entry
@@ -123,7 +145,18 @@ class Boot:
     dmesg: str = ""
     securityfs: str = ""
     console: str = ""
+    eventlog: bytes = b""
+    slb_length: int = 0
+    slb_sha256: str = ""
+    iommu: str = ""
+    cmdline: str = ""
     error: Exception | None = None
+    skipped: str | None = None
+
+    @property
+    def events(self) -> list[Event]:
+        """The event log's events, none when nothing was dumped."""
+        return parse(self.eventlog) if self.eventlog else []
 
     @property
     def xen_lines(self) -> str:
@@ -164,10 +197,55 @@ def _warmed_firmware() -> Path:
     return warmed_firmware(trenchboot.CACHE_DIR, boot)
 
 
+# Where Xen reserved the SKL's event log, as v0.5.2 prints the range,
+# "(base - end)", and the v4 patchset does, "[base, end)".
+_XEN_EVENT_LOG_RE = re.compile(
+    r"SLAUNCH: reserving event log [\[(]\s*(0x[0-9a-fA-F]+)\s*[-,]\s*(0x[0-9a-fA-F]+)"
+)
+
+
+def _event_log(console: Console, entry: Entry, capture: str) -> bytes:
+    """The DRTM event log as hex off the console: Linux exposes it in
+    securityfs, dom0 reads Xen's reserved range out of `/dev/mem`. The
+    hex comes as one line, so the newline after it is the dump's own and
+    the prompt does not land on the line."""
+    if entry.os == "linux":
+        source = "/sys/kernel/security/slaunch/eventlog"
+        out = console.run(f"xxd -p {source} | tr -d '\\n'; echo")
+    else:
+        match = _XEN_EVENT_LOG_RE.search(capture)
+        if match is None:
+            raise RuntimeError("Xen printed no event log range")
+        base, end = (int(x, 16) for x in match.groups())
+        if base % 4096 or (end - base) % 4096:
+            raise RuntimeError(f"event log range {match.group(0)!r} is not in pages")
+        out = console.run(
+            f"dd if=/dev/mem bs=4096 skip={base // 4096} count={(end - base) // 4096}"
+            " 2>/dev/null | xxd -p | tr -d '\\n'; echo"
+        )
+    try:
+        return bytes.fromhex(out)
+    except ValueError:
+        raise RuntimeError(f"the event log dump is not hex: {out[:200]!r}") from None
+
+
+def _slb(console: Console) -> tuple[int, str]:
+    """The SLB header's length field and the SHA-256 of that many bytes of
+    the SKL the image ships, what SKINIT measures."""
+    header = console.run("xxd -p -s 2 -l 2 /boot/skl.bin")
+    length = int.from_bytes(bytes.fromhex(header), "little")
+    # BusyBox head has no -c, dd reads the same bytes.
+    digest = console.run(
+        f"dd if=/boot/skl.bin bs={length} count=1 2>/dev/null | sha256sum"
+    )
+    return length, digest.split()[0]
+
+
 def _boot(name: str, log_dir: Path) -> Boot:
     entry = ENTRIES[name]
     boot = Boot(entry, log_dir)
     dasharo = entry.firmware == "dasharo"
+    xen = entry.os == "xen"
     try:
         with QemuVm(
             log_dir,
@@ -176,18 +254,34 @@ def _boot(name: str, log_dir: Path) -> Boot:
             tpm="tis",
         ) as vm:
             console = Console(vm, BOOT_TIMEOUT)
-            boot.titles = console.select_entry(entry.title, boot_prompt=dasharo)
+            try:
+                boot.titles = console.select_entry(entry.title, boot_prompt=dasharo)
+            except LookupError as e:
+                if not entry.optional:
+                    raise
+                boot.skipped = str(e)
+                return boot
             console.wait_for_login(entry.banner)
             console.login()
+            # The kernel's console messages otherwise land in the middle
+            # of a command's output, a 64 KiB hex dump among them.
+            console.run("dmesg -n 1")
             assert vm.qmp is not None
             boot.record = vm.qmp.execute("query-amd-drtm")
             boot.pcrs = console.pcrs(list(range(17, 23)))
-            if entry.os == "xen":
+            if xen:
                 # For the log only: the console ring can lose early lines,
                 # so tests read Xen's lines off the serial capture instead.
                 boot.xen_log = console.run("xl dmesg | grep -i -E 'slaunch|drtm'")
+                boot.iommu = console.run("xl info | grep virt_caps")
+            else:
+                boot.iommu = console.run("ls /sys/class/iommu /sys/kernel/iommu_groups")
+                boot.cmdline = console.run("cat /proc/cmdline")
             boot.dmesg = console.run("dmesg | grep -i -E 'slaunch|slmodule|drtm'")
             boot.securityfs = console.run("ls /sys/kernel/security/slaunch 2>&1")
+            if entry.launch:
+                boot.eventlog = _event_log(console, entry, vm.capture)
+                boot.slb_length, boot.slb_sha256 = _slb(console)
             boot.console = vm.capture
     except Exception as e:
         if entry.broken_reason is None:
@@ -248,6 +342,8 @@ def _entry_fixture(name: str):
     @pytest.fixture(scope="session", name=name)
     def wait_for_boot() -> Boot:
         boot = SESSION.booted(name)
+        if boot.skipped is not None:
+            pytest.skip(boot.skipped)
         if boot.error is not None:
             pytest.fail(f"{boot.entry.title!r} did not reach the shell: {boot.error}")
         return boot
@@ -262,6 +358,7 @@ xen_mb2_launch = _entry_fixture("xen_mb2_launch")
 xen_mb2 = _entry_fixture("xen_mb2")
 linux_launch = _entry_fixture("linux_launch")
 linux_legacy_launch = _entry_fixture("linux_legacy_launch")
+linux_alt_launch = _entry_fixture("linux_alt_launch")
 linux = _entry_fixture("linux")
 
 
@@ -272,3 +369,15 @@ def expects_boot(name: str):
     pass."""
     reason = ENTRIES[name].broken_reason
     return pytest.mark.xfail(reason is not None, reason=reason or "", strict=True)
+
+
+# The SKL's log has the SKL's extends. Under the service the PSP extends
+# PCR 17 and 18 too, at its LAUNCH and at the SKL's request, and logs
+# them in a log of its own that nothing fetches, so the replay of the
+# SKL's log alone cannot reach the PCRs. Strict, so an image that merges
+# the two logs is noticed.
+replays_without_psp = pytest.mark.xfail(
+    PSP == "on",
+    reason="the PSP's extends are in its own log, which the SKL's does not carry",
+    strict=True,
+)

@@ -26,26 +26,36 @@ in flight before the first assertion.
 
 ## The entries
 
-The image's GRUB menu lists six entries. Each has a fixture of the same
-name in `tests/conftest.py`, and a test takes the fixture of the boot it
-asserts on. Only entries a test names are booted, so a run boots five:
-the three launches, the Xen EFI control and the Linux control. The Linux
-one is kept because a kernel booted directly is what an IOMMU that passes
-DMA through breaks, while Xen's dom0 never notices. The normal MB2 entry
-only serves the menu check.
+The image's GRUB menu lists six entries, and a fork build a seventh.
+Each has a fixture of the same name in `tests/conftest.py`, and a test
+takes the fixture of the boot it asserts on. Only entries a test names
+are booted, so a run boots five on a release and six on a fork build:
+the launches, the Xen EFI control and the Linux control. The Linux one is
+kept because a kernel booted directly is what an IOMMU that passes DMA
+through breaks, while Xen's dom0 never notices. The normal MB2 entry only
+serves the menu check.
+
+The seventh, `Boot Linux with TrenchBoot (alt)`, is the Linux launch
+with `drtmtest=alt` on the kernel command line, which the fork's images
+carry and the releases do not. Its tests skip on an image without it.
+The two launches share the SKL and the kernel, so PCR 17 has to come out
+the same and PCR 18 has to differ, with the log's command line event the
+one that moved.
 
 The MB2 entries are legacy boots and run under QEMU's SeaBIOS, the way a
 BIOS board would run them. Under Dasharo's UEFI the MB2 launch runs SKL
 and then stops. The EFI entries and the Linux ones run under Dasharo.
 
-| Fixture          | GRUB entry                       | Firmware | On v0.5.2 here |
-|------------------|----------------------------------|----------|----------------|
-| `xen_efi_launch` | Boot Xen with TrenchBoot (EFI)   | Dasharo  | launches       |
-| `xen_efi`        | Boot Xen normally (EFI)          | Dasharo  | boots, control |
-| `xen_mb2_launch` | Boot Xen with TrenchBoot (MB2)   | SeaBIOS  | launches       |
-| `linux_launch`   | Boot Linux with TrenchBoot       | Dasharo  | kernel panic   |
-| `linux`          | Boot Linux normally              | Dasharo  | boots, control |
-| `xen_mb2`        | Boot Xen normally (MB2)          | SeaBIOS  | not booted     |
+| Fixture               | GRUB entry                       | Firmware | On v0.5.2 here           |
+|-----------------------|----------------------------------|----------|--------------------------|
+| `xen_efi_launch`      | Boot Xen with TrenchBoot (EFI)   | Dasharo  | launches                 |
+| `xen_efi`             | Boot Xen normally (EFI)          | Dasharo  | boots, control           |
+| `xen_mb2_launch`      | Boot Xen with TrenchBoot (MB2)   | SeaBIOS  | launches                 |
+| `linux_launch`        | Boot Linux with TrenchBoot       | Dasharo  | kernel panic             |
+| `linux_legacy_launch` | Boot Linux with TrenchBoot       | SeaBIOS  | launches                 |
+| `linux`               | Boot Linux normally              | Dasharo  | boots, control           |
+| `xen_mb2`             | Boot Xen normally (MB2)          | SeaBIOS  | not booted               |
+| `linux_alt_launch`    | Boot Linux with TrenchBoot (alt) | SeaBIOS  | not in the menu, skipped |
 
 Entries are selected by title from the menu GRUB draws, not by a fixed
 index, so a new entry in the image moves nothing here. The tests of an
@@ -69,7 +79,16 @@ What each session expects:
 | `xen_mb2_launch`      | PSP-assisted launch, TMR released | boots, PCRs not extended          |
 | `linux_launch`        | PSP-assisted launch, TMR released | boots, PCRs not extended          |
 | `linux_legacy_launch` | PSP-assisted launch, TMR released | boots, PCRs not extended          |
+| `linux_alt_launch`    | PSP-assisted launch, TMR released | boots, PCRs not extended          |
 | `linux`               | boots, control                    | boots, control                    |
+
+The event log replay is a strict expected failure under `DRTM_PSP=on`:
+the service extends PCR 17 and 18 too, at its `LAUNCH` and at the SKL's
+request, and logs those in a log of its own that `GET_TCG_LOGS` hands out
+and nothing in the image fetches. The SKL's log alone cannot reach the
+PCRs there: the `AMDSL` SKL's log opens with `SKINIT` and goes straight
+to the OS's events, the DLME measurement having gone to the service. The
+day an image merges the two, the run says so.
 
 The first `AMDSL` build taught the harness two things. Its wic carried
 the EFI boot alone, with a stub in the master boot record that boots
@@ -125,10 +144,37 @@ Once the shell answers, before the VM is torn down:
 - PCRs 17 to 22 from `tpm2_pcrread`, in one read.
 - Xen's `slaunch` and `drtm` lines from `xl dmesg`, the same from `dmesg`,
     and the listing of `/sys/kernel/security/slaunch`.
+- What the OS says of its IOMMU: Xen's `virt_caps` line from `xl info`,
+    or the kernel's `/sys/class/iommu` and `/sys/kernel/iommu_groups`
+    listings. A Linux boot also keeps `/proc/cmdline`.
+- On a launch, the DRTM event log the SKL wrote, as hex over the
+    console: Linux exposes it at `/sys/kernel/security/slaunch/eventlog`,
+    and under Xen dom0 reads the range Xen's "reserving event log" line
+    names out of `/dev/mem`. With it, the length field of the SLB header
+    of the image's `/boot/skl.bin` and the SHA-256 of that many bytes of
+    it, what `SKINIT` measures.
 - The whole console capture. The Xen tests read the hypervisor's lines
     off it, the ones tagged `(XEN)`, rather than off `xl dmesg`: the
     console ring is small and a verbose boot pushes the early lines out
     of it, while the serial output keeps them.
+
+## The event log
+
+`drtmtest/eventlog.py` parses the log as the SKL writes it, a TCG2 log
+with the SHA-1 and SHA-256 banks and one `TCG_PCR_EVENT2` per extend,
+and replays a PCR from the zero a locality 4 start leaves. `EV_NO_ACTION`
+events are logged but not extended, which matters on Linux: the kernel
+brackets its own measurements with two such tags on PCR 17, and a replay
+that extends them lands off the TPM's value. The image's own
+`anti-evil-maid-dump-evt-log`, in v0.5.3-rc1 onwards, replays them and
+so agrees with the TPM under Xen only.
+
+The launch tests check that the log opens with `SKINIT`'s event on
+PCR 17, whose digest is the SLB's, that the platform's record has the
+same SLB length as the header, and that the replay of PCR 17 and 18
+reaches what `tpm2_pcrread` returned. The parser has its own tests in
+`tests/test_eventlog.py`, against the logs two v0.5.3-rc1 launches left
+in `tests/fixtures/`.
 
 ## Logs
 

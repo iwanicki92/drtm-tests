@@ -25,4 +25,10 @@ def test_titles_come_out_in_menu_order_once_each():
 
 
 def test_the_image_lists_every_entry_this_suite_knows(xen_efi: Boot):
-    assert set(xen_efi.titles) == {entry.title for entry in ENTRIES.values()}
+    """Every entry the suite relies on is in the menu, and nothing the
+    suite does not know is. The optional ones may be missing."""
+    titles = set(xen_efi.titles)
+    known = {entry.title for entry in ENTRIES.values()}
+    required = {entry.title for entry in ENTRIES.values() if not entry.optional}
+    assert required <= titles, required - titles
+    assert titles <= known, titles - known
