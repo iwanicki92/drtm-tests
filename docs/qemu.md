@@ -147,6 +147,8 @@ PSP-assisted launch path the README describes.
 | `-trace ...`                                                               | The launch events, listed below. Pattern arguments need quoting in a shell.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `-serial mon:stdio`                                                        | `tb-boot`'s console on the terminal, with the monitor on the same stream. The tests use `-serial tcp:127.0.0.1:<port>,server` and read it over a socket.                                                                                                                                                                                                                                                                                                                                                                 |
 
+`DRTM_QEMU_ARGS` goes after all of these, so what it repeats wins.
+
 The swtpm side:
 
 - `socket` serves QEMU over a socket rather than a character device.

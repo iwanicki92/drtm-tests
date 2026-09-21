@@ -7,6 +7,7 @@
 """
 
 import os
+import shlex
 from pathlib import Path
 
 from drtmtest import qemu_vm
@@ -51,6 +52,13 @@ def psp_mode() -> str | None:
     raise RuntimeError(f"DRTM_PSP={value!r} is not off, on or classic")
 
 
+def extra_args() -> list[str]:
+    """What `DRTM_QEMU_ARGS` adds to every boot, split like a shell would.
+    QEMU takes the last of a repeated argument, so `-m 6G` here overrides
+    the memory, and a `-machine` merges into the machine options."""
+    return shlex.split(os.environ.get("DRTM_QEMU_ARGS", ""))
+
+
 def unsupported_binary() -> str | None:
     """Why the QEMU in use cannot boot this image, or `None` if it can."""
     return qemu_vm.unsupported_binary(PROBE_OPTIONS)
@@ -70,6 +78,7 @@ def options(
     `strict` makes the platform device stop the VM on a broken launch rule,
     so a wrong launch is a panic the harness sees rather than a line in
     the log. `psp` adds the Secure Processor with its DRTM service.
+    `DRTM_QEMU_ARGS` comes last.
     """
     args = [
         "-machine",
@@ -97,4 +106,4 @@ def options(
         args += ["-device", PSP_DEVICE]
     for trace in LAUNCH_TRACES:
         args += ["-trace", trace]
-    return args
+    return args + extra_args()

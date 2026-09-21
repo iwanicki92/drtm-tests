@@ -87,6 +87,32 @@ The `AMDSL` SKL needs the service. Without it the SKL still sends its
 releases SL_DEV, and the launch tests fail on that. The plain matrix is
 for a classic image, the one `env.sh` selects.
 
+### A launch that keeps the TMR
+
+An image whose Xen or Linux has no PSP client never releases the TMR,
+and what the session then shows depends on memory. GRUB sizes the TMR
+to the top of RAM. With the default 2 GiB it ends at `0x7ff00000` and
+the boot goes on until the disk is needed: every AHCI transfer lands in
+the TMR, `qemu.log` fills with `amd_drtm_dma_blocked tmr0`, the disk
+never attaches and the boot hangs at init. With RAM above 4 GiB the TMR
+covers the interrupt message window at `0xFEE00000` as well, so every
+IO-APIC and MSI interrupt is dropped, and Xen's timer check walks its
+fallbacks. QEMU still delivers the last one, the 8259 wired straight to
+the CPU, so Xen carries on into a dom0 without device interrupts and
+hangs there. Hardware where that wire is dead panics in the check
+instead, with "IO-APIC + timer doesn't work!". Taking the 8254 away
+gets the same panic here, which the harness reports as a guest panic:
+
+```sh
+DRTM_PSP=on DRTM_TB_IMAGE=/path/to/build.wic \
+    DRTM_QEMU_ARGS="-m 6G -machine pit=off" \
+    uv run pytest tests/test_xen.py -k launch
+```
+
+Neither is a session default. The memory is what lets six boots share
+a 16 GB host, and a machine without an 8254 would change every boot for
+the sake of one failure.
+
 ## What a boot gathers
 
 Once the shell answers, before the VM is torn down:

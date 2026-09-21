@@ -54,6 +54,12 @@ deploys, read where it is. No entry is expected broken on it, since a local
 build is usually there to test a fix: an entry marked xfail on the releases
 has to pass on it. Set together with `DRTM_TB_RELEASE` it is refused.
 
+`DRTM_QEMU_ARGS` appends its words to every QEMU command line of the
+session, split like a shell would. QEMU takes the last of a repeated
+argument, so `-m 6G` raises the memory and `-machine pit=off` merges into
+the machine options. `docs/testing.md` has the recipe this is for.
+`tb-boot` takes the same after `--`.
+
 To boot the image by hand, with the serial console on stdio:
 
 ```sh
