@@ -66,19 +66,26 @@ What each session expects:
 |-----------------------|-----------------------------------|-----------------------------------|
 | `xen_efi_launch`      | PSP-assisted launch, TMR released | boots, PCRs not extended          |
 | `xen_efi`             | boots, control                    | boots, control                    |
-| `xen_mb2_launch`      | no legacy boot code, see below    | boots, PCRs not extended          |
-| `linux_launch`        | launches, then no disk, see below | boots, PCRs not extended          |
-| `linux_legacy_launch` | no legacy boot code, see below    | boots, PCRs not extended          |
+| `xen_mb2_launch`      | PSP-assisted launch, TMR released | boots, PCRs not extended          |
+| `linux_launch`        | PSP-assisted launch, TMR released | boots, PCRs not extended          |
+| `linux_legacy_launch` | PSP-assisted launch, TMR released | boots, PCRs not extended          |
 | `linux`               | boots, control                    | boots, control                    |
 
-Two of those are findings rather than choices. The `AMDSL` build's wic
-carries the EFI boot alone, with a stub in the master boot record that
-boots nothing, so the SeaBIOS entries cannot start on it. The harness
-reads the record and expects them broken on any such image. And the
-kernel of that build walks the PCI devices for the PSP in `setup_arch()`,
-before any is enumerated, so it never learns of the service. It boots
-through the launch, but it never releases the TMR GRUB set up over all
-of memory, its disk's DMA stays blocked, and it stops at the missing root.
+The first `AMDSL` build taught the harness two things. Its wic carried
+the EFI boot alone, with a stub in the master boot record that boots
+nothing, so the SeaBIOS entries could not start on it. The harness reads
+the record and expects them broken on any such image. And its kernel
+walked the PCI devices for the PSP in `setup_arch()`, before any is
+enumerated, so it never learned of the service, never released the TMR
+GRUB set up over all of memory, and stopped at the missing root with its
+disk's DMA blocked. Both are fixed in the build that followed: the kernel
+finds the PSP through configuration space and releases the TMR from its
+IOMMU setup, and the launch tests assert on the release.
+
+The `AMDSL` SKL needs the service. Without it the SKL still sends its
+`LAUNCH` and extend to a mailbox that is not there, both fail, it never
+releases SL_DEV, and the launch tests fail on that. The plain matrix is
+for a classic image, the one `env.sh` selects.
 
 ## What a boot gathers
 

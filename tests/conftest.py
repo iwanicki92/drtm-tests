@@ -59,19 +59,13 @@ class Entry:
         SeaBIOS entries. Under the service with a classic SKL every launch
         is expected to fail: neither its GRUB nor the SKL talks to the
         service, so the TPM localities the SKL and the OS extend through
-        stay locked, and only the service's LAUNCH would open them. Under the
-        service with the AMDSL SKL the Linux launch fails after it: the
-        kernel walks the PCI devices for the PSP in setup_arch(), before
-        any is enumerated, so it never learns of the service, never
-        releases the TMR, and its disk stays behind it."""
+        stay locked, and only the service's LAUNCH would open them."""
         if self.firmware == "seabios" and not trenchboot.legacy_bootable():
             return (
                 "the image has no legacy boot code, its wic carries the EFI boot alone"
             )
         if PSP == "classic" and self.launch:
             return "classic SKL: no LAUNCH, so the PSP's locality locks stay on the TPM"
-        if PSP == "on" and self.launch and self.os == "linux":
-            return "the kernel looks for the PSP before PCI enumeration, never releases the TMR, and its disk stays behind it"
         if self.broken is not None and trenchboot.release() is not None:
             return self.broken
         return None

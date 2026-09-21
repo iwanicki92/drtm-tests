@@ -67,9 +67,9 @@ uv run tb-boot query    # the launch record of the running instance
 `-device amd-psp,drtm-service=on`, to every boot. GRUB, SKL and Xen find
 it through the SMN pair on the host bridge and take the PSP-assisted
 launch: GRUB sets a TMR up, the `AMDSL` SKL has the service check and
-launch it, and Xen releases the TMR once its IOMMU is programmed. The
-launch tests then assert on the service's record too, and on Xen's
-PSP lines. No release carries the `AMDSL` SKL, so this goes with
+launch it, and Xen or Linux releases the TMR once its IOMMU is
+programmed. The launch tests then assert on the service's record too,
+and on Xen's PSP lines. No release carries the `AMDSL` SKL, so this goes with
 `DRTM_TB_IMAGE` naming a build that does. `tb-boot --psp` boots one by
 hand.
 
