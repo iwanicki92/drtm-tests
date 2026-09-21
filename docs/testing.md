@@ -96,6 +96,18 @@ not declare every bank the TPM has, which rules out one-bank records and
 a one-bank header. An image whose SKL does not merge the two logs fails
 the five replay tests under the service.
 
+The SKL asks the TPM which banks have PCRs and declares exactly those,
+in the TPM's order. Its own measurements carry SHA-1 and SHA-256 where
+the TPM has them and the placeholder elsewhere, extended into that bank
+as well, so a TPM with SHA-256 alone or with SHA-384 on top boots Linux
+and replays too. `DRTM_PCR_BANKS` sets the banks of the fresh TPM state
+to try that. Two limits remain. `SKINIT`'s record gets the placeholder
+in a bank the SKL cannot hash for, though the launch measured the SLB
+into that bank, so its replay is not expected to match. And Xen's
+legacy path logs one PCR 18 event against a one-bank header with a
+digest the TPM did not get, so that replay misses on `sha256` alone.
+The harness replays SHA-256 only.
+
 The first `AMDSL` build taught the harness two things. Its wic carried
 the EFI boot alone, with a stub in the master boot record that boots
 nothing, so the SeaBIOS entries could not start on it. The harness reads

@@ -61,6 +61,12 @@ argument, so `-m 6G` raises the memory and `-machine pit=off` merges into
 the machine options. `docs/testing.md` has the recipe this is for.
 `tb-boot` takes the same after `--`.
 
+`DRTM_PCR_BANKS` lists, comma separated, the banks the fresh TPM state
+of every boot has PCRs in, SHA-1 and SHA-256 by default as a discrete
+TPM ships. The SKL declares the TPM's banks in its event log and the
+kernel refuses a log that does not match them, so `sha256` alone or
+`sha1,sha256,sha384` exercise that.
+
 To boot the image by hand, with the serial console on stdio:
 
 ```sh

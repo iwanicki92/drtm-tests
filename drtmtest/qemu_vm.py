@@ -134,6 +134,19 @@ def qmp_args(sock: str) -> list[str]:
 # with these two.
 PCR_BANKS: tuple[str, ...] = ("sha1", "sha256")
 
+
+def pcr_banks() -> tuple[str, ...]:
+    """The banks a boot's fresh TPM state gets: what `DRTM_PCR_BANKS`
+    lists, comma separated, else `PCR_BANKS`. The SKL declares the TPM's
+    banks in its event log and fills the ones it cannot hash for with a
+    placeholder, and Linux refuses a log that does not match the TPM, so
+    other sets are for exercising that."""
+    value = os.environ.get("DRTM_PCR_BANKS", "").strip().lower()
+    if not value:
+        return PCR_BANKS
+    return tuple(bank.strip() for bank in value.split(",") if bank.strip())
+
+
 _STATE_FILE = "tpm2-00.permall"
 
 
@@ -177,13 +190,12 @@ def start_swtpm(
     state_dir: Path,
     sock: str,
     log_f,
-    pcr_banks: Iterable[str] | None = PCR_BANKS,
+    banks: Iterable[str] | None = None,
 ) -> subprocess.Popen:
     """Starts a TPM 2.0 emulator on a Unix socket and waits for the socket.
 
-    `state_dir` gets a fresh state with `pcr_banks` active first, or keeps
-    what it holds when that is None, which on an empty directory means
-    swtpm's own full set of banks.
+    `state_dir` gets a fresh state with `banks` active first, what
+    `pcr_banks()` says when that is None.
 
     Errors go to stderr regardless of `--log`, so a log holding only
     `swtpm_setup`'s lines means a clean run. `DRTM_SWTPM_LOG_LEVEL` adds
@@ -191,8 +203,7 @@ def start_swtpm(
     command.
     """
     state_dir.mkdir(parents=True, exist_ok=True)
-    if pcr_banks is not None:
-        allocate_pcr_banks(state_dir, pcr_banks, log_f)
+    allocate_pcr_banks(state_dir, banks if banks is not None else pcr_banks(), log_f)
     args = [
         "swtpm",
         "socket",
