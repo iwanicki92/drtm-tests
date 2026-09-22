@@ -16,28 +16,30 @@ Three things test the AMD dynamic launch under QEMU, and each has a home:
 - The `drtm` repository boots its own UEFI binary, a precondition checker,
     in a few seconds per configuration. Its harness is tuned for that
     binary and its scope is that binary.
-- This repository boots the whole image, every entry, and will grow axes
-    the other two should not: image and loader versions, a second
-    firmware, hardware logs.
+- This repository boots the whole image, every entry, under every
+    release and configuration of its matrix, and takes the axes the other
+    two should not: a second firmware, hardware logs.
 
 The harness started as a copy of the `drtm` one and is now the package
 both take, `drtmtest`: the QEMU process with its console, QMP and swtpm,
 the pinned downloads, the Dasharo firmware and its warmed copy, and the
 pytest session that boots ahead of the tests. What differs is the machine
 each suite boots, a list of QEMU options either side builds itself, and
-what it does on the console once the machine is up. `drtm` takes the
-package from a checkout beside it until this repository has a remote.
+what it does on the console once the machine is up. `drtm` still takes
+the package from a checkout beside it, the switch to this repository's
+remote pending.
 
 ## What a boot is
 
 One QEMU process on `-machine q35,smm=on,amd-drtm=on` with an `EPYC-Genoa`
 CPU, Dasharo's coreboot+UEFI build as flash or QEMU's SeaBIOS for the
 legacy entries, the image behind an IDE controller with `snapshot=on`, and
-an `swtpm` behind `tpm-tis` with the SHA-1 and SHA-256 banks active, as
-a discrete TPM ships. Strict mode is on, so a launch rule the
-emulator would otherwise only log stops the VM as a panic, and the panic
-action is set to pause so the stopped VM stays for the harness to see,
-which reports it within a second instead of at the timeout.
+an `swtpm` behind `tpm-tis` with the run's PCR banks active, SHA-1 and
+SHA-256 by default as a discrete TPM ships, and the Secure Processor with
+its DRTM service when the run asks for it. Strict mode is on, so a launch
+rule the emulator would otherwise only log stops the VM as a panic, and
+the panic action is set to pause so the stopped VM stays for the harness
+to see, which reports it within a second instead of at the timeout.
 
 The serial console is the only way in. A reader thread drains it into
 `serial.log` for the life of the boot, and the driver waits for prompts
@@ -45,10 +47,16 @@ from a cursor that advances with every match, so a prompt seen twice is
 two matches and a command's output is what came between its echo and the
 next prompt.
 
-Every GRUB entry is booted once per session, as many at a time as the CPUs
-and free memory allow, and the tests assert on what the boot gathered
-before the VM went away: the `query-amd-drtm` record, the six DRTM PCRs, and the
-`slaunch` lines from Xen's log, `dmesg` and securityfs.
+Every entry the tests take is booted once per session, as many at a
+time as the CPUs and free memory allow, and the tests assert on what the
+boot gathered before the VM went away: the `query-amd-drtm` record, the
+DRTM PCRs in every bank, the event log and the SKL's SLB, and the
+`slaunch` lines Xen printed on the console, `dmesg` and securityfs.
+
+Everything a boot takes from the environment, the QEMU binary, the TPM's
+banks, the PSP and the image among them, is read once on the main thread
+before the pool starts. The boots run on their own threads while the
+unit tests run, and those patch the environment.
 
 ## What is asserted
 
@@ -66,21 +74,25 @@ log the SKL leaves says that, so a launch also has to replay: its first
 event is `SKINIT`'s measurement of the SLB, and that digest has to be the
 digest of the SKL the image ships over the length its header gives, and
 the extends the log records have to reach the PCR 17 and 18 the TPM
-reads. Where an image offers a second launch differing in the kernel
-command line alone, PCR 17 has to stay and PCR 18 has to move, so the
-measurement is shown to cover what it claims. And the launched OS has to
-have its IOMMU up: the DLME released SL_DEV, and what keeps device DMA
-out of the launched kernel from then on is the IOMMU.
+reads, in every bank the TPM has, which the log has to declare. A second
+launch typed at GRUB's shell differs in the kernel command line alone,
+so PCR 17 has to stay and PCR 18 has to move, and the measurement is
+shown to cover what it claims. And the launched OS has to have its IOMMU
+up: the DLME released SL_DEV, and what keeps device DMA out of the
+launched kernel from then on is the IOMMU.
 
-Entries known not to boot on the upstream releases are expected failures with
-the reason in the test, strictly, so the day one boots the run says so.
+What the upstream releases are known to get wrong, entries that do not
+boot, a log declaring banks the TPM lacks, and the classic SKL under the
+PSP service, whose launches fail at the TPM behind the service's locality
+locks, are expected failures with the reason in the test, strictly, so
+the day one passes the run says so.
 
 ## Where the time goes
 
 Under TCG a boot to the login prompt is dominated by Xen and dom0, with
 the firmware and GRUB's loading of Xen, the kernel and the initrd before
 it. The harness takes what it can: the firmware image is warmed once per
-release so no boot populates the variable store, the boot manager's prompt
+firmware so no boot populates the variable store, the boot manager's prompt
 is answered rather than waited out, no VGA or NIC, and the loader's "press
 any key" pause is answered when it appears. KVM cannot help, since it does
 not run `SKINIT`.
