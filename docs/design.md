@@ -55,8 +55,12 @@ DRTM PCRs in every bank, the event log and the SKL's SLB, and the
 
 Everything a boot takes from the environment, the QEMU binary, the TPM's
 banks, the PSP and the image among them, is read once on the main thread
-before the pool starts. The boots run on their own threads while the
-unit tests run, and those patch the environment.
+before the pool starts, and so is a copy of the environment itself, which
+every process a boot spawns runs in. The boots run on their own threads
+while the unit tests run, and those patch the environment. A child
+spawned without an environment of its own reads the live one on its way
+to `exec`, sharing the parent's address space under `vfork`, and a write
+from the main thread at that moment fails the `exec` with `EFAULT`.
 
 ## What is asserted
 

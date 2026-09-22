@@ -10,6 +10,7 @@ with a kernel parameter added, for a boot typed at GRUB's shell.
 import re
 import struct
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 
 # Where the image's GRUB reads its menu from. The legacy copy under
@@ -36,14 +37,16 @@ def boot_partition_offset(image: Path) -> int:
     raise LookupError(f"{image} has no EFI system partition in its MBR")
 
 
-def read(image: Path, path: str = CONFIG) -> str:
-    """One file off the boot partition, through `mtype`."""
+def read(image: Path, path: str = CONFIG, env: Mapping[str, str] | None = None) -> str:
+    """One file off the boot partition, through `mtype`, run in `env`, the
+    caller's own environment when None."""
     offset = boot_partition_offset(image)
     result = subprocess.run(
         ["mtype", "-i", f"{image}@@{offset}", f"::{path}"],
         capture_output=True,
         check=False,
         text=True,
+        env=env,
     )
     if result.returncode != 0:
         raise RuntimeError(f"mtype could not read {path} off {image}: {result.stderr}")
@@ -84,10 +87,13 @@ def with_parameter(commands: list[str], parameter: str) -> list[str]:
     return out
 
 
-def commands(image: Path, title: str, parameter: str) -> list[str]:
+def commands(
+    image: Path, title: str, parameter: str, env: Mapping[str, str] | None = None
+) -> list[str]:
     """The commands of the image's entry `title` with `parameter` added
-    to its kernel command line."""
-    found = entries(read(image))
+    to its kernel command line. `env` is `mtype`'s environment: a boot on
+    its own thread passes its `Settings.environment`."""
+    found = entries(read(image, env=env))
     if title not in found:
         raise LookupError(f"no GRUB entry {title!r} in the image, it has {list(found)}")
     return with_parameter(found[title], parameter)

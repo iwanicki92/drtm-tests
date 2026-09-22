@@ -14,7 +14,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from drtmtest.qmp_client import QmpClient
@@ -157,6 +157,11 @@ class Settings:
     overlap with unit tests that patch the environment, and a boot that
     read it at that moment took the test's values, a TPM with the wrong
     banks among them.
+
+    `environment` is what the boot's processes, `swtpm_setup`, `swtpm` and
+    QEMU, run in, copied at the same moment. A child given none reads the
+    live one in the parent's address space under `vfork`, and a thread
+    writing it just then fails the child's `execv` with `EFAULT`.
     """
 
     binary: str
@@ -168,6 +173,7 @@ class Settings:
     # program not on PATH stays a bare name, so the error names it.
     swtpm_setup: str = "swtpm_setup"
     swtpm: str = "swtpm"
+    environment: Mapping[str, str] = field(default_factory=os.environ.copy)
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -178,6 +184,7 @@ class Settings:
             os.environ.get("DRTM_SWTPM_LOG_LEVEL"),
             shutil.which("swtpm_setup") or "swtpm_setup",
             shutil.which("swtpm") or "swtpm",
+            os.environ.copy(),
         )
 
 
@@ -199,11 +206,16 @@ def _wait_for_socket(process: subprocess.Popen, sock: str, what: str) -> None:
 
 
 def allocate_pcr_banks(
-    state_dir: Path, banks: Iterable[str], log_f, program: str = "swtpm_setup"
+    state_dir: Path,
+    banks: Iterable[str],
+    log_f,
+    program: str = "swtpm_setup",
+    env: Mapping[str, str] | None = None,
 ) -> None:
     """Writes a TPM 2.0 state into `state_dir` with only `banks` active,
     through `program`, `swtpm_setup` by name or path, replacing any state
-    already there."""
+    already there. `env` is the program's environment, the caller's own
+    when None."""
     state_dir.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
@@ -218,6 +230,7 @@ def allocate_pcr_banks(
         stdout=log_f,
         stderr=subprocess.STDOUT,
         check=True,
+        env=env,
     )
     if not (state_dir / _STATE_FILE).exists():
         raise RuntimeError(f"swtpm_setup wrote no {_STATE_FILE} into {state_dir}")
@@ -230,12 +243,15 @@ def start_swtpm(
     banks: Iterable[str] | None = None,
     log_level: str | None = None,
     programs: tuple[str, str] = ("swtpm_setup", "swtpm"),
+    env: Mapping[str, str] | None = None,
 ) -> subprocess.Popen:
     """Starts a TPM 2.0 emulator on a Unix socket and waits for the socket.
 
     `state_dir` gets a fresh state with `banks` active first, what
     `pcr_banks()` says when that is None. `programs` are `swtpm_setup`
-    and `swtpm`, by name or by path.
+    and `swtpm`, by name or by path, and `env` the environment both run
+    in, the caller's own when None. A boot on its own thread passes its
+    `Settings.environment`, so neither child reads the live one.
 
     Errors go to stderr regardless of `--log`, so a log holding only
     `swtpm_setup`'s lines means a clean run. `log_level` is swtpm's own
@@ -245,7 +261,11 @@ def start_swtpm(
     state_dir.mkdir(parents=True, exist_ok=True)
     setup, swtpm = programs
     allocate_pcr_banks(
-        state_dir, banks if banks is not None else pcr_banks(), log_f, program=setup
+        state_dir,
+        banks if banks is not None else pcr_banks(),
+        log_f,
+        program=setup,
+        env=env,
     )
     args = [
         swtpm,
@@ -258,7 +278,7 @@ def start_swtpm(
     ]
     if log_level:
         args += ["--log", f"fd=1,level={log_level}"]
-    process = subprocess.Popen(args, stdout=log_f, stderr=subprocess.STDOUT)
+    process = subprocess.Popen(args, stdout=log_f, stderr=subprocess.STDOUT, env=env)
     _wait_for_socket(process, sock, "control socket")
     return process
 
@@ -312,9 +332,10 @@ class QemuVm:
     SeaBIOS. `save_firmware_to` keeps that copy after a clean exit, which
     is how a warmed image is made. `tpm` attaches an swtpm-backed TPM 2.0
     as `tis` or `crb`, or nothing when `None`. `settings` is the binary,
-    the accelerator and the TPM's banks, read from the environment here
-    and now when `None`: a suite whose boots run on their own threads
-    reads them once up front and passes them in.
+    the accelerator, the TPM's banks and the environment the processes
+    run in, read from the environment here and now when `None`: a suite
+    whose boots run on their own threads reads them once up front and
+    passes them in.
     """
 
     def __init__(
@@ -391,6 +412,7 @@ class QemuVm:
                 banks=self.settings.banks,
                 log_level=self.settings.swtpm_log_level,
                 programs=(self.settings.swtpm_setup, self.settings.swtpm),
+                env=self.settings.environment,
             )
             args += tpm_args(self._swtpm_sock, self.tpm)
         self._qmp_sock = _short_socket_path("drtmtest-qmp-")
@@ -401,7 +423,10 @@ class QemuVm:
         args += ["-serial", f"tcp:127.0.0.1:{serial_port},server"]
         (self.log_dir / "qemu-args.txt").write_text("\n".join(args) + "\n")
         self._process = subprocess.Popen(
-            args, stdout=qemu_out, stderr=subprocess.STDOUT
+            args,
+            stdout=qemu_out,
+            stderr=subprocess.STDOUT,
+            env=self.settings.environment,
         )
         self.qmp = QmpClient(self._qmp_sock)
         self._serial_sock = self._connect_serial(serial_port)

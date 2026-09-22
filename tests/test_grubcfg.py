@@ -12,6 +12,7 @@ import pytest
 
 from drtmtest.grubcfg import (
     boot_partition_offset,
+    commands,
     entries,
     with_parameter,
 )
@@ -107,3 +108,21 @@ def test_a_disk_without_one_is_refused(tmp_path: Path):
     image.write_bytes(bytes(512))
     with pytest.raises(ValueError):
         boot_partition_offset(image)
+
+
+def test_the_menu_is_read_in_the_environment_given(tmp_path: Path, monkeypatch):
+    """A stand-in `mtype`, found through the PATH of the environment given
+    and nowhere else, so the read never touches the live one."""
+    image = tmp_path / "disk.wic"
+    image.write_bytes(_mbr([(0xEF, 2048)]))
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    (binaries / "config").write_text(CONFIG)
+    mtype = binaries / "mtype"
+    mtype.write_text(f"#!/bin/sh\n/bin/cat {binaries / 'config'}\n")
+    mtype.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path / "elsewhere"))
+    found = commands(
+        image, "Boot Linux normally", "drtmtest=alt", env={"PATH": str(binaries)}
+    )
+    assert found[-1].endswith(" drtmtest=alt")

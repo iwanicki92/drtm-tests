@@ -38,10 +38,12 @@ BOOT_TIMEOUT = 420.0
 GUEST_MEM_GIB = 2
 
 # Everything a boot takes from the environment is read here, at import on
-# the main thread, and handed to the boot. The boots run on the pool's
-# threads while the unit tests run on this one, and those patch the
-# environment: a boot that read it at that moment booted a TPM with the
-# test's banks. The image is the exception, unpacked by `_prepare`.
+# the main thread, and handed to the boot, the environment its processes
+# run in included. The boots run on the pool's threads while the unit
+# tests run on this one, and those patch the environment: a boot that read
+# it at that moment booted a TPM with the test's banks, and a child of one
+# that read it on its way to exec failed with EFAULT. The image is the
+# exception, unpacked by `_prepare`.
 
 # Whether the boots get the Secure Processor's DRTM service, and whether
 # the image's SKL is expected to use it: `None`, "on" or "classic".
@@ -305,7 +307,9 @@ def _boot(name: str, log_dir: Path) -> Boot:
             if entry.parameter is None:
                 boot.titles = console.select_entry(entry.title, boot_prompt=dasharo)
             else:
-                commands = grubcfg.commands(_image(), entry.title, entry.parameter)
+                commands = grubcfg.commands(
+                    _image(), entry.title, entry.parameter, env=SETTINGS.environment
+                )
                 (log_dir / "grub-commands.txt").write_text("\n".join(commands) + "\n")
                 boot.titles = console.type_entry(commands, boot_prompt=dasharo)
             console.wait_for_login(entry.banner)

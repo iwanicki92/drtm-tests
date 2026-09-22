@@ -5,8 +5,10 @@
 """A boot's settings come from the environment once, where the caller reads
 them, never on the boot's own thread: a session's boots overlap with unit
 tests that patch the environment, and a boot that read it at that moment
-took the test's values."""
+took the test's values. The processes a boot spawns run in a copy taken
+then, so none of them reads the live environment on its way to exec."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -28,6 +30,17 @@ def test_settings_hold_what_the_environment_said_when_read(monkeypatch):
     assert settings.kvm is False
     assert settings.banks == ("sha256",)
     assert settings.swtpm_log_level == "20"
+
+
+def test_settings_carry_a_copy_of_the_environment(monkeypatch):
+    monkeypatch.setenv("DRTMTEST_MARK", "one")
+    monkeypatch.delenv("DRTMTEST_GONE", raising=False)
+    settings = Settings.from_environment()
+    monkeypatch.setenv("DRTMTEST_MARK", "two")
+    monkeypatch.setenv("DRTMTEST_GONE", "back")
+    assert settings.environment["DRTMTEST_MARK"] == "one"
+    assert "DRTMTEST_GONE" not in settings.environment
+    assert settings.environment is not os.environ
 
 
 def test_settings_name_the_swtpm_programs_by_path(tmp_path: Path, monkeypatch):
@@ -86,3 +99,23 @@ def test_the_state_is_written_by_the_program_given(tmp_path: Path, monkeypatch):
     with open(tmp_path / "swtpm.log", "wb") as log:
         allocate_pcr_banks(tmp_path / "state", ["sha256"], log, program=str(script))
     assert "--pcr-banks sha256" in (tmp_path / "state" / "tpm2-00.permall").read_text()
+
+
+def test_the_program_runs_in_the_environment_given(tmp_path: Path, monkeypatch):
+    script = tmp_path / "swtpm_setup"
+    script.write_text(
+        "#!/bin/sh\n"
+        'while [ "$1" != --tpmstate ]; do shift; done\n'
+        'echo "$DRTMTEST_MARK" > "$2/tpm2-00.permall"\n'
+    )
+    script.chmod(0o755)
+    monkeypatch.setenv("DRTMTEST_MARK", "live")
+    with open(tmp_path / "swtpm.log", "wb") as log:
+        allocate_pcr_banks(
+            tmp_path / "state",
+            ["sha256"],
+            log,
+            program=str(script),
+            env={"DRTMTEST_MARK": "given"},
+        )
+    assert (tmp_path / "state" / "tpm2-00.permall").read_text() == "given\n"
