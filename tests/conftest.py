@@ -44,7 +44,7 @@ PSP = machine.psp_mode()
 class Entry:
     """One GRUB entry: its title, which OS it boots, whether through a
     launch, and under which firmware. `broken` names why it is not expected
-    to boot on the pinned releases. An `optional` entry is one only some
+    to boot on the upstream releases. An `optional` entry is one only some
     images carry, and its tests skip where the menu lacks it."""
 
     title: str
@@ -57,10 +57,11 @@ class Entry:
     @property
     def broken_reason(self) -> str | None:
         """Why this session is not expected to boot the entry, or `None`
-        when it should. The pinned releases carry known breakage, and a
-        local build is usually there to test a fix, so nothing is expected
-        broken on one. An image without legacy boot code cannot boot the
-        SeaBIOS entries. Under the service with a classic SKL every launch
+        when it should. The upstream releases carry known breakage, while
+        the fork's image carries the fixes and a local build is usually
+        there to test one, so nothing is expected broken on those. An image
+        without legacy boot code cannot boot the SeaBIOS entries. Under the
+        service with a classic SKL every launch
         is expected to fail: neither its GRUB nor the SKL talks to the
         service, so the TPM localities the SKL and the OS extend through
         stay locked, and only the service's LAUNCH would open them."""
@@ -70,7 +71,7 @@ class Entry:
             )
         if PSP == "classic" and self.launch:
             return "classic SKL: no LAUNCH, so the PSP's locality locks stay on the TPM"
-        if self.broken is not None and trenchboot.release() is not None:
+        if self.broken is not None and trenchboot.upstream():
             return self.broken
         return None
 
@@ -87,11 +88,12 @@ ENTRIES: dict[str, Entry] = {
     "xen_mb2_launch": Entry(
         "Boot Xen with TrenchBoot (MB2)", "xen", True, firmware="seabios"
     ),
-    # The releases' GRUB reads the kernel's MLE header from the wrong offset
-    # in its EFI SKINIT setup, so SKL enters the kernel at startup_32, not
-    # sl_stub_entry. The kernel never learns of the launch, never executes
-    # STGI, and with GIF still clear its timer check panics. The legacy
-    # path below boots, and so does a build with the GRUB fix.
+    # The upstream releases' GRUB reads the kernel's MLE header from the
+    # wrong offset in its EFI SKINIT setup, so SKL enters the kernel at
+    # startup_32, not sl_stub_entry. The kernel never learns of the
+    # launch, never executes STGI, and with GIF still clear its timer
+    # check panics. The legacy path below boots, and so does a build with
+    # the GRUB fix.
     "linux_launch": Entry(
         "Boot Linux with TrenchBoot",
         "linux",
@@ -102,9 +104,9 @@ ENTRIES: dict[str, Entry] = {
         "Boot Linux with TrenchBoot", "linux", True, firmware="seabios"
     ),
     # The Linux launch with one more kernel parameter, which the fork's
-    # images carry and the releases do not. The SKL measures the command
-    # line into PCR 18, so this launch must differ from the plain one
-    # there and nowhere else.
+    # images carry and the upstream releases do not. The SKL measures the
+    # command line into PCR 18, so this launch must differ from the plain
+    # one there and nowhere else.
     "linux_alt_launch": Entry(
         "Boot Linux with TrenchBoot (alt)",
         "linux",

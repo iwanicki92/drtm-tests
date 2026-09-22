@@ -72,7 +72,7 @@ measurement is shown to cover what it claims. And the launched OS has to
 have its IOMMU up: the DLME released SL_DEV, and what keeps device DMA
 out of the launched kernel from then on is the IOMMU.
 
-Entries known not to boot on the pinned release are expected failures with
+Entries known not to boot on the upstream releases are expected failures with
 the reason in the test, strictly, so the day one boots the run says so.
 
 ## Where the time goes

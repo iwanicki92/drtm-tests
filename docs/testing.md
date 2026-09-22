@@ -29,7 +29,8 @@ in flight before the first assertion.
 The image's GRUB menu lists six entries, and a fork build a seventh.
 Each has a fixture of the same name in `tests/conftest.py`, and a test
 takes the fixture of the boot it asserts on. Only entries a test names
-are booted, so a run boots five on a release and six on a fork build:
+are booted, so a run boots five on an upstream release and six on the
+fork's image:
 the launches, the Xen EFI control and the Linux control. The Linux one is
 kept because a kernel booted directly is what an IOMMU that passes DMA
 through breaks, while Xen's dom0 never notices. The normal MB2 entry only
@@ -37,7 +38,8 @@ serves the menu check.
 
 The seventh, `Boot Linux with TrenchBoot (alt)`, is the Linux launch
 with `drtmtest=alt` on the kernel command line, which the fork's images
-carry and the releases do not. Its tests skip on an image without it.
+carry and the upstream releases do not. Its tests skip on an image
+without it.
 The two launches share the SKL and the kernel, so PCR 17 has to come out
 the same and PCR 18 has to differ, with the log's command line event the
 one that moved.
@@ -68,7 +70,7 @@ decides, from the release, the image and `DRTM_PSP`.
 
 `DRTM_PSP=on` boots everything with the Secure Processor's DRTM service,
 for an image built with the `AMDSL` SKL. `DRTM_PSP=classic` is the same
-service under a release or the classic SKL, which never talk to it and
+service under an upstream release or any classic SKL, which never talk to it and
 extend into locked localities. The README says what the service does.
 What each session expects:
 

@@ -10,6 +10,7 @@ the local build `DRTM_TB_IMAGE` boots in place of a release.
 import gzip
 import os
 import shutil
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -17,24 +18,47 @@ from drtmtest.assets import Asset
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / "dl-cache"
 
+
+@dataclass(frozen=True)
+class Release:
+    """One pinned image. An `upstream` one is a meta-trenchboot release,
+    with the breakage the entries mark. The fork's test image carries the
+    fixes, both SKL builds and the alt Linux entry, and nothing is
+    expected broken on it."""
+
+    asset: Asset
+    upstream: bool = True
+
+
 # GRUB with the TrenchBoot loader, SKL, Xen with slaunch and a Linux with
-# slaunch, six GRUB entries between them. The default is the newest release
-# that is not a release candidate.
+# slaunch, six GRUB entries between them, seven on the fork's image. The
+# default is the fork's test image, built from its amd-drtm branch.
 _IMAGE_URL = (
-    "https://github.com/zarhus/meta-trenchboot/releases/download/"
+    "https://github.com/{owner}/meta-trenchboot/releases/download/"
     "{tag}/tb-full-image-genericx86-64.rootfs.wic.gz"
 )
-RELEASES: dict[str, Asset] = {
-    "v0.5.2": Asset(
-        url=_IMAGE_URL.format(tag="v0.5.2"),
-        sha256="702276d64f8aa9633a6aef1c88767716311d733a1dcbede2ed9e4d7a1cb380ca",
+RELEASES: dict[str, Release] = {
+    "amd-drtm-test-image": Release(
+        Asset(
+            url=_IMAGE_URL.format(owner="iwanicki92", tag="amd-drtm-test-image"),
+            sha256="1440fa6548b419ba99dde5de4b262f2e3e3ebb0f6addbea62f0e68b96bca7a13",
+        ),
+        upstream=False,
     ),
-    "v0.5.3-rc1": Asset(
-        url=_IMAGE_URL.format(tag="v0.5.3-rc1"),
-        sha256="3ae50150714d1591aefb961ce88515ca9b3a07bea2e0f3c9fcb7fa37e129ff0e",
+    "v0.5.2": Release(
+        Asset(
+            url=_IMAGE_URL.format(owner="zarhus", tag="v0.5.2"),
+            sha256="702276d64f8aa9633a6aef1c88767716311d733a1dcbede2ed9e4d7a1cb380ca",
+        )
+    ),
+    "v0.5.3-rc1": Release(
+        Asset(
+            url=_IMAGE_URL.format(owner="zarhus", tag="v0.5.3-rc1"),
+            sha256="3ae50150714d1591aefb961ce88515ca9b3a07bea2e0f3c9fcb7fa37e129ff0e",
+        )
     ),
 }
-DEFAULT_RELEASE = "v0.5.2"
+DEFAULT_RELEASE = "amd-drtm-test-image"
 
 
 def local_image() -> Path | None:
@@ -68,7 +92,7 @@ def description() -> str:
     return f"{local} (modified {modified.isoformat(timespec='seconds')})"
 
 
-def image() -> Asset:
+def image() -> Release:
     tag = release()
     if tag is None:
         raise RuntimeError("DRTM_TB_IMAGE is set, there is no release to fetch")
@@ -76,6 +100,12 @@ def image() -> Asset:
         known = ", ".join(RELEASES)
         raise RuntimeError(f"DRTM_TB_RELEASE={tag} is not pinned here, known: {known}")
     return RELEASES[tag]
+
+
+def upstream() -> bool:
+    """Whether the image under test is an upstream release, the ones with
+    known breakage. The fork's image and a local build are not."""
+    return release() is not None and image().upstream
 
 
 def legacy_bootable() -> bool:
@@ -96,7 +126,7 @@ def unpacked_image() -> Path:
     local = local_image()
     if local is not None:
         return local
-    asset = image()
+    asset = image().asset
     path = CACHE_DIR / f"{asset.sha256}.wic"
     if path.exists():
         return path

@@ -45,15 +45,18 @@ The first run downloads the Dasharo firmware and the image release into
 `dl-cache/` and unpacks the image there, about 1.5 GB in all. Each run
 writes its logs to a numbered directory under `logs/`.
 
-The image is the newest meta-trenchboot release by default. Set
-`DRTM_TB_RELEASE` to another tag pinned in `drtmtest/trenchboot.py` to boot that
-one instead, a release candidate for instance. Each release keeps its own
-download and unpacked disk in `dl-cache/`.
+The image is the fork's `amd-drtm-test-image` release by default, a
+build of its `amd-drtm` branch with both SKL builds, the alt Linux entry
+and the fixes the upstream releases lack. Set `DRTM_TB_RELEASE` to
+another tag pinned in `drtmtest/trenchboot.py` to boot that one instead,
+an upstream release such as `v0.5.2` for instance. Each release keeps
+its own download and unpacked disk in `dl-cache/`.
 
 `DRTM_TB_IMAGE` boots a build of your own instead: the raw `.wic` bitbake
 deploys, read where it is. No entry is expected broken on it, since a local
-build is usually there to test a fix: an entry marked xfail on the releases
-has to pass on it. Set together with `DRTM_TB_RELEASE` it is refused.
+build is usually there to test a fix: an entry marked xfail on the upstream
+releases has to pass on it. Set together with `DRTM_TB_RELEASE` it is
+refused.
 
 `DRTM_QEMU_ARGS` appends its words to every QEMU command line of the
 session, split like a shell would. QEMU takes the last of a repeated
@@ -82,12 +85,13 @@ it through the SMN pair on the host bridge and take the PSP-assisted
 launch: GRUB sets a TMR up, the `AMDSL` SKL has the service check and
 launch it, and Xen or Linux releases the TMR once its IOMMU is
 programmed. The launch tests then assert on the service's record too,
-and on Xen's PSP lines. No release carries the `AMDSL` SKL, so this goes with
-`DRTM_TB_IMAGE` naming a build that does. `tb-boot --psp` boots one by
+and on Xen's PSP lines. The default image carries the `AMDSL` SKL and the
+upstream releases do not, so this goes with the default or with
+`DRTM_TB_IMAGE` naming a build that has it. `tb-boot --psp` boots one by
 hand.
 
 `DRTM_PSP=classic` is the same service under an image with the classic
-SKL, the releases among them. Neither that GRUB nor that SKL talks to
+SKL, the upstream releases among them. Neither that GRUB nor that SKL talks to
 the service, and the service keeps TPM localities 1 to 4 locked until a
 `LAUNCH` nobody issues. The launch still boots: the SKL's extends at
 locality 2 go into a locked locality unnoticed, and the OS's own extends
