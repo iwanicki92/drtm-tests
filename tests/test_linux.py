@@ -111,7 +111,9 @@ def test_the_command_line_is_measured_into_pcr_18_alone(
 ):
     """The two launches share the SKL and the kernel and differ in the
     command line, so PCR 17 and 18 have to tell only that apart, and the
-    log's command line event is where."""
+    log's command line event is where. The zero page carries the command
+    line's address and size, so its event may move with it too, as it
+    does on v0.5.2."""
     plain, alt = linux_legacy_launch, linux_alt_launch
     assert "drtmtest=alt" not in plain.cmdline, plain.cmdline
     assert plain.pcrs[17] == alt.pcrs[17], (plain.pcrs, alt.pcrs)
@@ -122,7 +124,11 @@ def test_the_command_line_is_measured_into_pcr_18_alone(
     differing = [
         data for data in plain_events if plain_events[data] != alt_events[data]
     ]
-    assert differing == [b"Measured Kernel command line"], differing
+    assert b"Measured Kernel command line" in differing, differing
+    assert set(differing) <= {
+        b"Measured Kernel command line",
+        b"Measured boot parameters",
+    }, differing
 
 
 def test_normal_boot_launches_nothing(linux: Boot):

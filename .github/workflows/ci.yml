@@ -1,0 +1,150 @@
+# SPDX-FileCopyrightText: 2026 iwanicki92 <iwanicki92@gmail.com>
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Lints on every push and pull request. Boots the matrix, every pinned
+# release under every configuration, on pull requests to main, pushes to
+# main and by hand, and publishes the results to the results branch on a
+# push to main. Every step is a task from Taskfile.yml, so the same runs
+# on a host: docs/testing.md, "The matrix in CI".
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      releases:
+        description: Comma-separated release tags to boot, every pinned one by default
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  UV_LOCKED: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      - run: uv sync
+      - run: uvx pre-commit run --all-files --show-diff-on-failure
+
+  matrix:
+    # The releases and configurations come from the code, so a new image
+    # is one dict entry in drtmtest/trenchboot.py.
+    if: github.event_name != 'pull_request' || github.base_ref == 'main'
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - id: matrix
+        run: |
+          echo "matrix=$(uv run python -m drtmtest.matrix --releases '${{ inputs.releases }}')" \
+            >> "$GITHUB_OUTPUT"
+
+  boot:
+    needs: matrix
+    # Pinned rather than ubuntu-latest: the QEMU bundle was built on 24.04
+    # and links its glibc, glib and pixman.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+    name: boot ${{ matrix.release }} ${{ matrix.configuration }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install swtpm, mtools and the libraries QEMU links
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            swtpm swtpm-tools mtools \
+            libpixman-1-0 libfdt1 libglib2.0-0t64 libgcrypt20
+      - uses: astral-sh/setup-uv@v10
+      - uses: arduino/setup-task@v3
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Cache the downloads, not the unpacked disks
+        uses: actions/cache@v6
+        with:
+          path: |
+            dl-cache/
+            !dl-cache/*.wic
+            !dl-cache/*.warm
+            !dl-cache/*-qemu/
+          key: dl-cache-${{ matrix.release }}-${{ hashFiles('drtmtest/trenchboot.py', 'drtmtest/dasharo.py', 'drtmtest/bundle.py') }}
+      - name: Fetch the QEMU bundle
+        run: echo "DRTM_QEMU_BINARY=$(task ci:qemu)" >> "$GITHUB_ENV"
+      - name: Boot the cell
+        run: task ci:test RELEASE=${{ matrix.release }} CONFIG=${{ matrix.configuration }}
+      - name: Upload the logs and results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-${{ matrix.release }}-${{ matrix.configuration }}
+          path: logs/
+          if-no-files-found: warn
+
+  report:
+    needs: [matrix, boot]
+    if: always() && needs.matrix.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: results-branch
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - uses: arduino/setup-task@v3
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: logs-*
+          path: ${{ runner.temp }}/logs
+      - name: Render the tables and badges
+        run: |
+          task report RESULTS="$RUNNER_TEMP/logs" OUT="$RUNNER_TEMP/report" -- \
+            --run "${{ github.run_number }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          cat "$RUNNER_TEMP/report/README.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: report
+          path: ${{ runner.temp }}/report/
+      - name: Publish to the results branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch origin results; then
+            git worktree add "$RUNNER_TEMP/results" FETCH_HEAD
+            git -C "$RUNNER_TEMP/results" switch -C results
+            git -C "$RUNNER_TEMP/results" rm -rfq .
+          else
+            git worktree add --orphan -b results "$RUNNER_TEMP/results"
+          fi
+          cp -r "$RUNNER_TEMP/report/." "$RUNNER_TEMP/results/"
+          cd "$RUNNER_TEMP/results"
+          git add -A
+          git commit -m "Results for main at ${GITHUB_SHA::12}, run ${{ github.run_number }}"
+          git push origin results
+      - name: Fail with the matrix
+        if: needs.boot.result != 'success'
+        run: exit 1

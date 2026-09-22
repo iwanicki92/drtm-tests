@@ -19,3 +19,30 @@ tasks:
     desc: Boot the image by hand with the console on stdio
     cmds:
       - uv run tb-boot {{.CLI_ARGS}}
+
+  qemu-bundle:
+    desc: Pack a QEMU build into the tarball CI downloads (QEMU_BUILD, TAG)
+    requires:
+      vars: [QEMU_BUILD]
+    cmds:
+      - uv run python -m drtmtest.bundle pack {{.QEMU_BUILD}} {{if .TAG}}--tag {{.TAG}}{{end}} --out {{.OUT | default "dist"}}
+
+  ci:qemu:
+    desc: Fetch the pinned QEMU bundle and print its binary's path
+    silent: true
+    cmds:
+      - uv run python -m drtmtest.bundle
+
+  ci:test:
+    desc: Run one cell of the matrix (RELEASE, CONFIG), pytest args after --
+    requires:
+      vars: [RELEASE, CONFIG]
+    cmds:
+      - uv run python -m drtmtest.matrix run {{.RELEASE}} {{.CONFIG}} {{.CLI_ARGS}}
+
+  report:
+    desc: Render a directory of results.json files (RESULTS) into OUT
+    requires:
+      vars: [RESULTS]
+    cmds:
+      - uv run python -m drtmtest.report {{.RESULTS}} --out {{.OUT | default "report"}} {{.CLI_ARGS}}

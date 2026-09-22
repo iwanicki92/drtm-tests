@@ -37,6 +37,11 @@ FAILURES = ("Panic on CPU", "Kernel panic")
 
 KEY_DOWN = b"\x1b[B"
 
+# How long GRUB may take to draw the highlight after a key. A starved
+# guest can read the key's escape sequence as three plain keys and move
+# nothing, so a move that draws nothing is pressed once more.
+KEY_TIMEOUT = 10.0
+
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][A-Z0-9]|\x1b[=>]")
 # A menu entry as GRUB draws it: an optional highlight marker, the title,
 # then the padding to the box's edge.
@@ -89,8 +94,21 @@ class Console:
         titles = self._menu(boot_prompt)
         if title not in titles:
             raise LookupError(f"no GRUB entry {title!r}, the menu lists {titles}")
-        self.vm.send(KEY_DOWN * titles.index(title) + b"\r")
+        for step in range(titles.index(title)):
+            self._move_down(titles[step + 1])
+        self.vm.send(b"\r")
         return titles
+
+    def _move_down(self, expected: str) -> None:
+        """One Down, until GRUB draws the highlight on `expected`."""
+        for _ in range(2):
+            self.vm.send(KEY_DOWN)
+            try:
+                self.vm.expect("*" + expected, KEY_TIMEOUT)
+                return
+            except TimeoutError:
+                continue
+        raise RuntimeError(f"GRUB did not move the highlight to {expected!r}")
 
     def type_entry(self, commands: list[str], boot_prompt: bool = True) -> list[str]:
         """Answers the firmware, then runs `commands` at GRUB's shell in

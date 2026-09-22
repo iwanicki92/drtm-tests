@@ -4,9 +4,11 @@
 
 """A pytest plugin that boots ahead of the tests: every boot the collected
 tests need is started in a pool at collection, each run gets a numbered
-log directory, and `results.txt` in it says how the run went.
+log directory, and `results.txt` and `results.json` in it say how the
+run went.
 """
 
+import json
 import os
 import re
 import threading
@@ -19,6 +21,10 @@ from pathlib import Path
 import pytest
 
 _RUN_DIR_RE = re.compile(r"^(\d{4})-")
+
+# How pytest reports a strict expected failure that passed: a failure
+# whose text opens with this, the reason after it.
+_XPASS_STRICT = "[XPASS(strict)]"
 _MAX_RUN_NUMBER = 9999
 
 
@@ -36,8 +42,9 @@ class BootSession[T]:
     pool, for the one build or unpack every boot would otherwise queue up
     behind. `workers` is the pool size, or how to compute it at run time.
     `check()` returns why this QEMU cannot run the suite, which ends the
-    session before anything boots, and `header()` adds lines to
-    `results.txt`.
+    session before anything boots, `header()` adds lines to
+    `results.txt`, and `details()` is what `results.json` records of the
+    session besides the tests, the image and the machine for instance.
 
     Register it from `conftest.py`:
 
@@ -56,6 +63,7 @@ class BootSession[T]:
         prepare: Callable[[list[str]], None] | None = None,
         check: Callable[[], str | None] | None = None,
         header: Callable[[], list[str]] | None = None,
+        details: Callable[[], dict] | None = None,
     ):
         self.logs_dir = Path(logs_dir)
         self._boot = boot
@@ -64,11 +72,13 @@ class BootSession[T]:
         self._prepare = prepare
         self._check = check
         self._header = header
+        self._details = details
         self._run_log_dir: Path | None = None
         self._run_log_dir_lock = threading.Lock()
         self._pool: ThreadPoolExecutor | None = None
         self._futures: dict[str, Future[T]] = {}
         self._reports: list[pytest.TestReport] = []
+        self._entries: dict[str, list[str]] = {}
         self._started = 0.0
 
     def _next_run_number(self) -> int:
@@ -144,9 +154,12 @@ class BootSession[T]:
             return
         first_wanted: dict[str, int] = {}
         for index, item in enumerate(items):
-            for name in getattr(item, "fixturenames", ()):
-                if name in self.names:
-                    first_wanted.setdefault(name, index)
+            taken = [
+                name for name in getattr(item, "fixturenames", ()) if name in self.names
+            ]
+            self._entries[item.nodeid] = taken
+            for name in taken:
+                first_wanted.setdefault(name, index)
         if not first_wanted:
             return
         wanted = sorted(first_wanted, key=first_wanted.__getitem__)
@@ -175,9 +188,50 @@ class BootSession[T]:
             collapsed[report.nodeid] = (outcome, duration + report.duration)
         return collapsed
 
+    def _records(self) -> list[dict]:
+        """One record per test for `results.json`, the expected failures
+        kept apart from the skips: `outcome` is passed, failed, skipped,
+        xfailed or xpassed, `ok` whether pytest counted it a failure, and
+        `reason` the expectation's, on the two x outcomes."""
+        records: dict[str, dict] = {}
+        for report in self._reports:
+            record = records.setdefault(
+                report.nodeid,
+                {
+                    "id": report.nodeid,
+                    "file": report.nodeid.split("::", 1)[0],
+                    "entries": self._entries.get(report.nodeid, []),
+                    "outcome": "passed",
+                    "ok": True,
+                    "reason": None,
+                    "duration": 0.0,
+                },
+            )
+            record["duration"] += report.duration
+            reason = getattr(report, "wasxfail", None)
+            text = report.longreprtext
+            if report.failed:
+                record["ok"] = False
+                if text.startswith(_XPASS_STRICT):
+                    record["outcome"] = "xpassed"
+                    record["reason"] = text[len(_XPASS_STRICT) :].strip()
+                else:
+                    record["outcome"] = "failed"
+            elif report.skipped and reason is not None:
+                record["outcome"] = "xfailed"
+                record["reason"] = reason
+            elif report.skipped and record["outcome"] == "passed":
+                record["outcome"] = "skipped"
+            elif report.passed and reason is not None and record["ok"]:
+                record["outcome"] = "xpassed"
+                record["reason"] = reason
+        for record in records.values():
+            record["duration"] = round(record["duration"], 1)
+        return list(records.values())
+
     def pytest_sessionfinish(self, session: pytest.Session, exitstatus: int) -> None:
-        """Writes `results.txt` beside the run's logs, so a log directory
-        records what was being tested and how it went."""
+        """Writes `results.txt` and `results.json` beside the run's logs, so
+        a log directory records what was being tested and how it went."""
         if self._pool is not None:
             # Drops boots nothing ever waited for, which is what -x leaves
             # queued. One already running still has to finish.
@@ -191,12 +245,14 @@ class BootSession[T]:
         summary = ", ".join(
             f"{count} {outcome}" for outcome, count in sorted(counts.items())
         )
-        lines = [f"finished:    {datetime.now().astimezone().isoformat()}"]
+        finished = datetime.now().astimezone()
+        elapsed = time.monotonic() - self._started
+        lines = [f"finished:    {finished.isoformat()}"]
         if self._header is not None:
             lines += self._header()
         lines += [
             f"exit status: {exitstatus}",
-            f"summary:     {summary} in {time.monotonic() - self._started:.1f}s",
+            f"summary:     {summary} in {elapsed:.1f}s",
             "",
         ]
         lines += [
@@ -213,3 +269,13 @@ class BootSession[T]:
                     "",
                 ]
         (self.run_log_dir() / "results.txt").write_text("\n".join(lines) + "\n")
+        results = {
+            "finished": finished.isoformat(),
+            "exit_status": int(exitstatus),
+            "duration": round(elapsed, 1),
+            "details": self._details() if self._details is not None else {},
+            "tests": self._records(),
+        }
+        (self.run_log_dir() / "results.json").write_text(
+            json.dumps(results, indent=2) + "\n"
+        )

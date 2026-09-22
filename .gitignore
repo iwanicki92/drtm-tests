@@ -25,3 +25,7 @@ logs/
 
 # Working directory of tb-boot
 run/
+
+# Bundles task qemu-bundle packs, and the report task report renders
+dist/
+report/

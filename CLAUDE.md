@@ -38,3 +38,8 @@ meta-trenchboot paths and release tags. Never a private notes repository.
 - `pre-commit run --all-files` lints everything (`pre-commit install`
     once).
 - `task test`, `task boot` and `task lint` wrap the above.
+- `task ci:qemu` fetches the pinned QEMU bundle and prints its binary,
+    `task ci:test RELEASE=<tag> CONFIG=<name>` runs one cell of the
+    matrix, `task report RESULTS=<dir>` renders results, `task
+    qemu-bundle QEMU_BUILD=<dir>` packs a build. The workflow in
+    `.github/workflows/ci.yml` calls these and nothing else.

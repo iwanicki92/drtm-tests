@@ -15,6 +15,7 @@ from conftest import (
     PSP,
     Boot,
     expects_boot,
+    expects_open_localities,
     expects_skls_banks,
     expects_xens_mbi_digest,
 )
@@ -111,6 +112,7 @@ def assert_log_replays(boot: Boot) -> None:
 def assert_log_declares_the_tpms_banks(boot: Boot) -> None:
     """The log's header declares the banks the TPM has PCRs in, no more
     and no fewer, which Linux checks before it takes the log."""
+    assert boot.eventlog, "no event log was dumped"
     assert set(banks(boot.eventlog)) == set(boot.bank_pcrs), (
         banks(boot.eventlog),
         list(boot.bank_pcrs),
@@ -136,11 +138,13 @@ def assert_not_launched(boot: Boot) -> None:
 
 
 @expects_boot("xen_efi_launch")
+@expects_open_localities()
 def test_efi_launch_is_recorded_by_the_platform(xen_efi_launch: Boot):
     assert_launched(xen_efi_launch)
 
 
 @expects_boot("xen_efi_launch")
+@expects_open_localities()
 def test_efi_launch_is_seen_by_xen(xen_efi_launch: Boot):
     assert_seen_by_xen(xen_efi_launch)
 
@@ -151,6 +155,7 @@ def test_efi_launch_brings_the_iommu_up(xen_efi_launch: Boot):
 
 
 @expects_boot("xen_efi_launch")
+@expects_open_localities()
 def test_efi_launch_log_replays_to_the_pcrs(xen_efi_launch: Boot):
     assert_log_replays(xen_efi_launch)
 
@@ -167,11 +172,13 @@ def test_efi_normal_boot_launches_nothing(xen_efi: Boot):
 
 
 @expects_boot("xen_mb2_launch")
+@expects_open_localities()
 def test_mb2_launch_is_recorded_by_the_platform(xen_mb2_launch: Boot):
     assert_launched(xen_mb2_launch)
 
 
 @expects_boot("xen_mb2_launch")
+@expects_open_localities()
 def test_mb2_launch_is_seen_by_xen(xen_mb2_launch: Boot):
     assert_seen_by_xen(xen_mb2_launch)
 
@@ -182,6 +189,7 @@ def test_mb2_launch_brings_the_iommu_up(xen_mb2_launch: Boot):
 
 
 @expects_boot("xen_mb2_launch")
+@expects_open_localities()
 @expects_xens_mbi_digest()
 def test_mb2_launch_log_replays_to_the_pcrs(xen_mb2_launch: Boot):
     assert_log_replays(xen_mb2_launch)

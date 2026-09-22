@@ -65,7 +65,10 @@ and then stops. The EFI entries and the Linux ones run under Dasharo.
 | `linux_alt_launch`    | Boot Linux with TrenchBoot, alt  | SeaBIOS  | launches                 |
 
 Entries are selected by title from the menu GRUB draws, not by a fixed
-index, so a new entry in the image moves nothing here. The tests of an
+index, so a new entry in the image moves nothing here. The highlight is
+moved one key at a time, each waited for in GRUB's redraw and pressed
+again if it drew nothing, since a starved guest can read the key's
+escape sequence as three plain keys. The tests of an
 entry the session is known not to boot are strict expected failures: they
 must fail, and a pass is reported as a failure so the change is noticed
 and the expectation removed. `Entry.broken_reason` in `tests/conftest.py`
@@ -75,18 +78,21 @@ decides, from the release, the image and `DRTM_PSP`.
 
 `DRTM_PSP=on` boots everything with the Secure Processor's DRTM service,
 for an image built with the `AMDSL` SKL. `DRTM_PSP=classic` is the same
-service under an upstream release or any classic SKL, which never talk to it and
-extend into locked localities. The README says what the service does.
-What each session expects:
+service under an upstream release or any classic SKL, which never talk
+to it and extend into locked localities: Xen boots on with its extends
+failing, so only its tests on the record and the PCRs are expected to
+fail, while Linux panics in `slaunch_pcr_extend` and nothing of its
+launch is expected to pass. The README says what the service does. What
+each session expects:
 
 | Fixture               | `DRTM_PSP=on`, `AMDSL` image      | `DRTM_PSP=classic`, classic image |
 |-----------------------|-----------------------------------|-----------------------------------|
 | `xen_efi_launch`      | PSP-assisted launch, TMR released | boots, PCRs not extended          |
 | `xen_efi`             | boots, control                    | boots, control                    |
 | `xen_mb2_launch`      | PSP-assisted launch, TMR released | boots, PCRs not extended          |
-| `linux_launch`        | PSP-assisted launch, TMR released | boots, PCRs not extended          |
-| `linux_legacy_launch` | PSP-assisted launch, TMR released | boots, PCRs not extended          |
-| `linux_alt_launch`    | PSP-assisted launch, TMR released | boots, PCRs not extended          |
+| `linux_launch`        | PSP-assisted launch, TMR released | panics on its extend              |
+| `linux_legacy_launch` | PSP-assisted launch, TMR released | panics on its extend              |
+| `linux_alt_launch`    | PSP-assisted launch, TMR released | panics on its extend              |
 | `linux`               | boots, control                    | boots, control                    |
 
 Under `DRTM_PSP=on` the service extends PCR 17 and 18 too, at its
@@ -233,6 +239,79 @@ and guest errors (`qemu.md` says how to read them), `qemu-stderr.log`,
 summarising every test's outcome and duration. The first run on a machine
 also has `boot-warm-firmware/`, the boot that produced the warmed firmware
 image in `dl-cache/`.
+
+`results.json` beside it is the same for machines: the release, the
+matrix configuration the environment amounts to, the QEMU and swtpm in
+use, the commit under test, the entries and one record per test with
+the fixtures it took and its outcome, where an expected failure is
+`xfailed` and an unexpected pass `xpassed` rather than the `skipped`
+and `failed` of `results.txt`. The report below is rendered from these.
+
+## The matrix in CI
+
+`.github/workflows/ci.yml` lints every push and pull request, and on
+pull requests to `main`, pushes to `main` and by hand boots every
+pinned release under every configuration, one job each. A
+configuration is the environment a session boots with, from
+`drtmtest/matrix.py`:
+
+| Name         | Environment                             | What it exercises                          |
+|--------------|-----------------------------------------|--------------------------------------------|
+| `classic`    | none                                    | Classic launch, TPM with SHA-1 and SHA-256 |
+| `psp`        | `DRTM_PSP=on`                           | PSP DRTM service on                        |
+| `sha256`     | `DRTM_PCR_BANKS=sha256`                 | TPM with SHA-256 alone                     |
+| `psp-sha256` | `DRTM_PSP=on`, `DRTM_PCR_BANKS=sha256`  | PSP DRTM service on, SHA-256 alone         |
+| `sha384`     | `DRTM_PCR_BANKS=sha1,sha256,sha384`     | TPM with SHA-384 on top                    |
+
+On the upstream releases the PSP configurations set `DRTM_PSP=classic`
+instead: their classic SKL never talks to the service, every launch is
+expected to fail at the TPM, and the tables show it as such. A run by
+hand takes an optional comma-separated list of release tags to boot a
+subset.
+
+The workflow calls `task` targets and nothing else, so a cell runs on a
+host the same way:
+
+```sh
+export DRTM_QEMU_BINARY=$(task ci:qemu)   # the pinned bundle, once
+task ci:test RELEASE=v0.5.2 CONFIG=sha256
+task ci:test RELEASE=amd-drtm-test-image CONFIG=psp -- -k xen_efi
+```
+
+`ci:test` clears `DRTM_PSP`, `DRTM_PCR_BANKS` and `DRTM_TB_IMAGE` and
+sets the cell's own, so the shell's setting cannot leak into a cell.
+Everything else, `DRTM_QEMU_BINARY` and `DRTM_QEMU_ARGS` among them,
+passes through.
+
+### The QEMU bundle
+
+CI does not build QEMU. The `drtm` branch is released on its fork as a
+tarball, tag `drtm-<QEMU version>-<n>`, holding
+`qemu/bin/qemu-system-x86_64` and `qemu/share/qemu/`, so the binary
+finds its firmware blobs through its own relative data directory, which
+the SeaBIOS entries need. `drtmtest/bundle.py` pins the tag and the
+SHA-256 the way the images are pinned, and `task ci:qemu` fetches it
+into `dl-cache/`, unpacks it under the hash and prints the binary's
+path. A bundle is made from a build directory with
+`task qemu-bundle QEMU_BUILD=/path/to/qemu/build`, which takes the
+binary, stripped, and the data directory of the install tree meson lays
+out in the build, prints the tarball and its hash, and the release is
+created by hand with the tarball attached. It was built on Ubuntu 24.04
+and the jobs run on that runner image, whose glibc, glib and pixman it
+links, and its swtpm is the same 0.7.3.
+
+### Results
+
+Every boot job uploads its `logs/` as an artifact, pass or fail, with
+`results.json` in it. The `report` job downloads them all and runs
+`task report RESULTS=<dir>`, which renders a page and one badge per
+release: a section per configuration with a table of the entries the
+suite boots against the releases, a cell being ✅ when every test of
+the entry passed and ❌ when one failed, whatever the suite expected,
+with the expectations noted under the table and the full per-test table
+folded below. The page goes to the job summary and, on a push to
+`main`, to the `results` branch, one commit per run, which the badges
+in the README read.
 
 ## Timeouts
 

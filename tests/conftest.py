@@ -14,12 +14,13 @@ memory allow, so a fixture is usually just waiting on a boot in flight.
 import os
 import re
 import shutil
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
 
-from drtmtest import grubcfg, machine, qemu_vm, trenchboot
+from drtmtest import bundle, grubcfg, machine, matrix, qemu_vm, trenchboot
 from drtmtest.console import LINUX_BANNER, XEN_BANNER, Console
 from drtmtest.dasharo import FIRMWARE, warmed_firmware
 from drtmtest.eventlog import Event, parse
@@ -73,18 +74,20 @@ class Entry:
         the fork's image carries the fixes and a local build is usually
         there to test one, so nothing is expected broken on those. An image
         without legacy boot code cannot boot the SeaBIOS entries. Under the
-        service with a classic SKL every launch
-        is expected to fail: neither its GRUB nor the SKL talks to the
-        service, so the TPM localities the SKL and the OS extend through
-        stay locked, and only the service's LAUNCH would open them. Linux
-        resets on a log whose banks are not the TPM's, which the upstream
-        SKL writes under any other banks."""
+        service with a classic SKL the TPM localities the SKL and the OS
+        extend through stay locked, since only the service's LAUNCH would
+        open them: Xen boots on with its extends failing, and Linux
+        panics on its own, in `slaunch_pcr_extend`. Linux also resets on
+        a log whose banks are not the TPM's, which the upstream SKL
+        writes under any other banks."""
         if self.firmware == "seabios" and not trenchboot.legacy_bootable():
             return (
                 "the image has no legacy boot code, its wic carries the EFI boot alone"
             )
-        if PSP == "classic" and self.launch:
-            return "classic SKL: no LAUNCH, so the PSP's locality locks stay on the TPM"
+        if PSP == "classic" and self.launch and self.os == "linux":
+            return (
+                "classic SKL: the kernel's extend fails at a locked locality, it panics"
+            )
         if self.broken is not None and trenchboot.upstream():
             return self.broken
         if OTHER_BANKS and self.launch and self.os == "linux":
@@ -226,14 +229,16 @@ def _event_log(console: Console, entry: Entry, capture: str) -> bytes:
     """The DRTM event log as hex off the console: Linux exposes it in
     securityfs, dom0 reads Xen's reserved range out of `/dev/mem`. The
     hex comes as one line, so the newline after it is the dump's own and
-    the prompt does not land on the line."""
+    the prompt does not land on the line. A Xen that printed no range
+    took no launch it could use, and the tests on the log fail on the
+    empty log this returns."""
     if entry.os == "linux":
         source = "/sys/kernel/security/slaunch/eventlog"
         out = console.run(f"xxd -p {source} | tr -d '\\n'; echo")
     else:
         match = _XEN_EVENT_LOG_RE.search(capture)
         if match is None:
-            raise RuntimeError("Xen printed no event log range")
+            return b""
         base, end = (int(x, 16) for x in match.groups())
         if base % 4096 or (end - base) % 4096:
             raise RuntimeError(f"event log range {match.group(0)!r} is not in pages")
@@ -347,6 +352,39 @@ def _check() -> str | None:
     return None
 
 
+def _first_line(*command: str) -> str | None:
+    """What a command prints first, `None` when it is not there or fails."""
+    try:
+        out = subprocess.run(
+            command, capture_output=True, text=True, timeout=30, check=False
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return out.stdout.splitlines()[0] if out.returncode == 0 and out.stdout else None
+
+
+def _details() -> dict:
+    """What `results.json` records of the session: the image, the matrix
+    configuration if the environment is one, the QEMU and swtpm in use,
+    the commit under test and the entries the tests take."""
+    qemu = Path(qemu_vm.binary())
+    return {
+        "release": trenchboot.release(),
+        "image": trenchboot.description(),
+        "configuration": matrix.current(),
+        "psp": PSP,
+        "banks": list(BANKS),
+        "qemu": _first_line(str(qemu), "--version"),
+        "qemu_bundle": bundle.TAG if bundle.is_bundled(qemu) else None,
+        "swtpm": _first_line("swtpm", "--version"),
+        "commit": _first_line("git", "-C", str(LOGS_DIR.parent), "rev-parse", "HEAD"),
+        "entries": {
+            name: {"title": entry.title, "firmware": entry.firmware}
+            for name, entry in ENTRIES.items()
+        },
+    }
+
+
 SESSION = BootSession(
     LOGS_DIR,
     _boot,
@@ -359,6 +397,7 @@ SESSION = BootSession(
         f"psp:         {PSP or 'off'}",
         f"banks:       {','.join(BANKS)}",
     ],
+    details=_details,
 )
 
 
@@ -395,6 +434,18 @@ def expects_boot(name: str):
     pass."""
     reason = ENTRIES[name].broken_reason
     return pytest.mark.xfail(reason is not None, reason=reason or "", strict=True)
+
+
+def expects_open_localities():
+    """Marks a test on what the launch extended: under the service with a
+    classic SKL nothing issues its LAUNCH, the localities stay locked,
+    every extend fails and the PCRs stay as SKINIT left them, so the
+    test must fail. The boot itself goes on, on Xen."""
+    return pytest.mark.xfail(
+        PSP == "classic",
+        reason="classic SKL: no LAUNCH, so the PSP's locality locks stay on the TPM",
+        strict=True,
+    )
 
 
 def expects_skls_banks():

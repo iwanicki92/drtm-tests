@@ -6,6 +6,10 @@ SPDX-License-Identifier: BSD-3-Clause
 
 # drtm-tests
 
+[![amd-drtm-test-image][badge-fork]][results]
+[![v0.5.2][badge-v0.5.2]][results]
+[![v0.5.3-rc1][badge-v0.5.3-rc1]][results]
+
 Boots the [meta-trenchboot](https://github.com/zarhus/meta-trenchboot)
 image under a QEMU that runs AMD's `SKINIT`, one boot per GRUB entry, and
 checks what each launch leaves behind: the emulator's launch record, the
@@ -95,11 +99,12 @@ hand.
 `DRTM_PSP=classic` is the same service under an image with the classic
 SKL, the upstream releases among them. Neither that GRUB nor that SKL talks to
 the service, and the service keeps TPM localities 1 to 4 locked until a
-`LAUNCH` nobody issues. The launch still boots: the SKL's extends at
-locality 2 go into a locked locality unnoticed, and the OS's own extends
-fail with all-ones answers, so the DRTM PCRs end up as `SKINIT` left
-them and the launch tests fail on them. They are strict expected
-failures in that session and the control entries have to boot.
+`LAUNCH` nobody issues. The SKL's extends at locality 2 go into a
+locked locality unnoticed, and the OS's own extends fail with all-ones
+answers, so the DRTM PCRs end up as `SKINIT` left them. Xen boots on
+and its tests on the record and the PCRs fail, Linux panics on its
+extend and none of its launch tests pass. Both are strict expected
+failures in that session, and the control entries have to boot.
 
 The emulated service follows AMD's DRTM guide where the hardware logs
 agreed with it and the hardware where they did not:
@@ -135,6 +140,18 @@ agreed with it and the hardware where they did not:
 Every guest-error line above stops a strict VM, like the platform's own
 rules. `docs/qemu.md` lists the device's properties and its traces.
 
+## CI
+
+Every push and pull request is linted. Pull requests to `main` and
+pushes to `main` boot the whole matrix on GitHub Actions: every pinned
+release under every machine configuration, fifteen jobs, each with the
+logs of its boots attached. A push to `main` also publishes the tables
+to the [`results` branch][results], one commit per run, which the badges
+above read. The QEMU it boots with is a release of the `drtm` branch,
+pinned in `drtmtest/bundle.py`. `docs/testing.md` says how to run one
+cell of the matrix on a host, with the same `task` targets the workflow
+calls.
+
 `docs/design.md` says why the suite is shaped as it is,
 `docs/testing.md` what a boot looks like and what the tests assert, and
 `docs/qemu.md` how to build the `drtm` branch, what every QEMU argument
@@ -145,3 +162,8 @@ is for and how to read the launch traces.
 BSD-3-Clause, see [LICENSE](LICENSE). `drtmtest/qmp_client.py` is adapted
 from third-party Apache-2.0 code and stays under that license, see
 [NOTICE](NOTICE).
+
+[results]: https://github.com/iwanicki92/drtm-tests/blob/results/README.md
+[badge-fork]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/amd-drtm-test-image.json
+[badge-v0.5.2]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/v0.5.2.json
+[badge-v0.5.3-rc1]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/v0.5.3-rc1.json

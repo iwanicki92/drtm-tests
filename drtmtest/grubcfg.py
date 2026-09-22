@@ -42,6 +42,7 @@ def read(image: Path, path: str = CONFIG) -> str:
     result = subprocess.run(
         ["mtype", "-i", f"{image}@@{offset}", f"::{path}"],
         capture_output=True,
+        check=False,
         text=True,
     )
     if result.returncode != 0:
