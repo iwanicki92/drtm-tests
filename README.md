@@ -47,6 +47,13 @@ export DRTM_QEMU_BINARY=/path/to/qemu-system-x86_64
 uv run pytest
 ```
 
+To boot the image by hand, with the serial console on stdio:
+
+```sh
+uv run tb-boot
+uv run tb-boot query    # the launch record of the running instance
+```
+
 The first run downloads the Dasharo firmware and the image release into
 `dl-cache/` and unpacks the image there, about 1.5 GB in all. Each run
 writes its logs to a numbered directory under `logs/`.
@@ -59,10 +66,10 @@ an upstream release such as `v0.5.2` for instance. Each release keeps
 its own download and unpacked disk in `dl-cache/`.
 
 `DRTM_TB_IMAGE` boots a build of your own instead: the raw `.wic` bitbake
-deploys, read where it is. No entry is expected broken on it, since a local
+deploys, read in place. No entry is expected broken on it, since a local
 build is usually there to test a fix: an entry marked xfail on the upstream
-releases has to pass on it. Set together with `DRTM_TB_RELEASE` it is
-refused.
+releases has to pass on it. It is refused if set together with
+`DRTM_TB_RELEASE`.
 
 `DRTM_QEMU_ARGS` appends its words to every QEMU command line of the
 session, split like a shell would. QEMU takes the last of a repeated
@@ -70,37 +77,47 @@ argument, so `-m 6G` raises the memory and `-machine pit=off` merges into
 the machine options. `docs/testing.md` has the recipe this is for.
 `tb-boot` takes the same after `--`.
 
-`DRTM_PCR_BANKS` lists, comma separated, the banks the fresh TPM state
-of every boot has PCRs in, SHA-1 and SHA-256 by default as a discrete
-TPM ships. The SKL declares the TPM's banks in its event log and the
-kernel refuses a log that does not match them, so `sha256` alone or
-`sha1,sha256,sha384` exercise that.
-
-To boot the image by hand, with the serial console on stdio:
-
-```sh
-uv run tb-boot
-uv run tb-boot query    # the launch record of the running instance
-```
+`DRTM_PCR_BANKS` names the PCR banks active in every boot's TPM,
+`sha1,sha256` by default, the two a discrete TPM ships with. The SKL
+declares the TPM's banks in its event log and the kernel refuses a log
+that does not match them, so `sha256` alone or `sha1,sha256,sha384`
+exercise that.
 
 ## The PSP path
 
-`DRTM_PSP=on` adds the Secure Processor with its DRTM service,
-`-device amd-psp,drtm-service=on`, to every boot. GRUB, SKL and Xen find
-it through the SMN pair on the host bridge and take the PSP-assisted
-launch: GRUB sets a TMR up, the `AMDSL` SKL has the service check and
-launch it, and Xen or Linux releases the TMR once its IOMMU is
-programmed. The launch tests then assert on the service's record too,
-and on Xen's PSP lines. The default image carries the `AMDSL` SKL and the
-upstream releases do not, so this goes with the default or with
-`DRTM_TB_IMAGE` naming a build that has it. `tb-boot --psp` boots one by
-hand.
+`DRTM_PSP` says whether the boots get AMD's Secure Processor and, with
+it, which launch the tests expect. Unset or `off`, the default, boots
+without one: every launch is the plain `SKINIT` path, and any image
+does. The other two values both add the same device,
+`-device amd-psp,drtm-service=on`, to every boot, and differ only in
+what the tests then expect. Pick the value from the SKL the image
+carries:
 
-`DRTM_PSP=classic` is the same service under an image with the classic
-SKL, the upstream releases among them. Neither that GRUB nor that SKL talks to
-the service, and the service keeps TPM localities 1 to 4 locked until a
-`LAUNCH` nobody issues. The SKL's extends at locality 2 go into a
-locked locality unnoticed, and the OS's own extends fail with all-ones
+- `DRTM_PSP=on` for an image built with the `AMDSL` SKL: the default
+    `amd-drtm-test-image` release, or a `DRTM_TB_IMAGE` build of the
+    fork's `amd-drtm` branch. Every launch is expected to go through
+    the service and pass.
+- `DRTM_PSP=classic` for an image with the classic SKL: the upstream
+    releases, or a build of upstream meta-trenchboot. Every launch is
+    expected to fail at the TPM, and the tests check that it does.
+
+The CI matrix picks it the same way, `on` on the fork's release and
+`classic` on the upstream ones. The wrong value fails the session:
+launches expected to pass fail, or ones marked expected failures pass,
+which the strict markers report as failures. `tb-boot --psp` adds the
+device to a boot by hand.
+
+Under `DRTM_PSP=on` GRUB, SKL and Xen find the service through the SMN
+pair on the host bridge and take the PSP-assisted launch: GRUB sets a
+TMR up, the `AMDSL` SKL has the service check and launch it, and Xen or
+Linux releases the TMR once its IOMMU is programmed. The launch tests
+then assert on the service's record too, and on Xen's PSP lines.
+
+Under `DRTM_PSP=classic` GRUB carries the same PSP code and sets a TMR
+up where it finds the service, but the classic SKL never talks to it,
+so the service keeps TPM localities 1 to 4 locked until a `LAUNCH`
+nobody issues. The SKL's extends at locality 2 go into a locked
+locality unnoticed, and the OS's own extends fail with all-ones
 answers, so the DRTM PCRs end up as `SKINIT` left them. Xen boots on
 and its tests on the record and the PCRs fail, Linux panics on its
 extend and none of its launch tests pass. Both are strict expected
