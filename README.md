@@ -1,6 +1,6 @@
 # Boot matrix results
 
-Commit `af57b7cd208a`, run [6](https://github.com/iwanicki92/drtm-tests/actions/runs/35782228277), finished 2026-09-22 20:50:21.
+Commit `f0b6ff881b9d`, run [7](https://github.com/iwanicki92/drtm-tests/actions/runs/35785121462), finished 2026-09-22 21:17:37.
 QEMU bundle `drtm-11.1.1-1` (11.1.1 (v11.1.1-43-gff57ce2273-dirty)), swtpm 0.7.3.
 
 Rows are the GRUB entries the suite boots, named as their fixtures
@@ -493,7 +493,7 @@ boot did, and the notes under the table what the suite expected of it.
 | Entry                 | amd-drtm-test-image | v0.5.2 | v0.5.3-rc1 |
 |-----------------------|---------------------|--------|------------|
 | `xen_efi_launch`      | ✅                   | ❌      | ❌          |
-| `xen_efi`             | ✅                   | ✅      | ✅          |
+| `xen_efi`             | ✅                   | ✅      | ❌          |
 | `xen_mb2_launch`      | ✅                   | ❌      | ❌          |
 | `linux_launch`        | ✅                   | ❌      | ❌          |
 | `linux_legacy_launch` | ✅                   | ❌      | ❌          |
@@ -509,11 +509,12 @@ boot did, and the notes under the table what the suite expected of it.
     - `xen_efi_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `xen_mb2_launch` expected: the upstream Xen copies the MBI's digests for SHA-1 and SHA-256 alone
     - `xen_mb2_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
-- `v0.5.3-rc1`: 67 passed, 18 xfailed.
+- `v0.5.3-rc1`: 2 failed, 65 passed, 18 xfailed.
     - `linux_launch` expected: panics in check_timer: SKL entered startup_32, GIF never set
     - `linux_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_legacy_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_alt_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
+    - `xen_efi`: 2 failed unexpectedly
     - `xen_efi_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `xen_mb2_launch` expected: the upstream Xen copies the MBI's digests for SHA-1 and SHA-256 alone
     - `xen_mb2_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
@@ -574,7 +575,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_matrix.py::test_the_environment_names_its_configuration[env6-None]`                   | passed              | passed  | passed     |
 | `tests/test_matrix.py::test_a_cell_replaces_the_configuration_variables_and_the_local_image`      | passed              | passed  | passed     |
 | `tests/test_menu.py::test_titles_come_out_in_menu_order_once_each`                                | passed              | passed  | passed     |
-| `tests/test_menu.py::test_the_image_lists_every_entry_this_suite_knows`                           | passed              | passed  | passed     |
+| `tests/test_menu.py::test_the_image_lists_every_entry_this_suite_knows`                           | passed              | passed  | failed     |
 | `tests/test_qemu_binary.py::test_the_configured_binary_is_ours`                                   | passed              | passed  | passed     |
 | `tests/test_qemu_binary.py::test_a_refused_option_is_reported`                                    | passed              | passed  | passed     |
 | `tests/test_qemu_binary.py::test_a_warning_named_in_rejects_is_reported`                          | passed              | passed  | passed     |
@@ -602,7 +603,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_xen.py::test_efi_launch_brings_the_iommu_up`                                          | passed              | passed  | passed     |
 | `tests/test_xen.py::test_efi_launch_log_replays_to_the_pcrs`                                      | passed              | passed  | passed     |
 | `tests/test_xen.py::test_efi_launch_log_declares_the_tpms_banks`                                  | passed              | xfailed | xfailed    |
-| `tests/test_xen.py::test_efi_normal_boot_launches_nothing`                                        | passed              | passed  | passed     |
+| `tests/test_xen.py::test_efi_normal_boot_launches_nothing`                                        | passed              | passed  | failed     |
 | `tests/test_xen.py::test_mb2_launch_is_recorded_by_the_platform`                                  | passed              | passed  | passed     |
 | `tests/test_xen.py::test_mb2_launch_is_seen_by_xen`                                               | passed              | passed  | passed     |
 | `tests/test_xen.py::test_mb2_launch_brings_the_iommu_up`                                          | passed              | passed  | passed     |
