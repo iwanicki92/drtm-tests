@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from drtmtest import bundle, grubcfg, machine, matrix, qemu_vm, trenchboot
-from drtmtest.console import LINUX_BANNER, XEN_BANNER, Console
+from drtmtest.console import LINUX_BANNER, XEN_BANNER, Console, hex_dump
 from drtmtest.dasharo import FIRMWARE, warmed_firmware
 from drtmtest.eventlog import Event, parse
 from drtmtest.qemu_vm import QemuVm
@@ -247,7 +247,7 @@ def _event_log(console: Console, entry: Entry, capture: str) -> bytes:
             " 2>/dev/null | xxd -p | tr -d '\\n'; echo"
         )
     try:
-        return bytes.fromhex(out)
+        return hex_dump(out)
     except ValueError:
         raise RuntimeError(f"the event log dump is not hex: {out[:200]!r}") from None
 
@@ -258,10 +258,10 @@ def _slb(console: Console) -> tuple[int, bytes]:
     the AMDSL one under the service."""
     skl = "/boot/skl-amdsl.bin" if PSP == "on" else "/boot/skl.bin"
     header = console.run(f"xxd -p -s 2 -l 2 {skl}")
-    length = int.from_bytes(bytes.fromhex(header), "little")
+    length = int.from_bytes(hex_dump(header), "little")
     out = console.run(f"xxd -p -l {length} {skl} | tr -d '\\n'; echo")
     try:
-        return length, bytes.fromhex(out)
+        return length, hex_dump(out)
     except ValueError:
         raise RuntimeError(f"the SLB dump is not hex: {out[:200]!r}") from None
 

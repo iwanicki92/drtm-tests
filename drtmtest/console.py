@@ -43,6 +43,9 @@ KEY_DOWN = b"\x1b[B"
 KEY_TIMEOUT = 10.0
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][A-Z0-9]|\x1b[=>]")
+# A hypervisor line, wherever it lands. Xen ends it with a newline, so
+# the output around it closes up once it is gone.
+_XEN_LINE_RE = re.compile(r"\(XEN\)[^\n]*")
 # A menu entry as GRUB draws it: an optional highlight marker, the title,
 # then the padding to the box's edge.
 _TITLE_RE = re.compile(r"\*?(Boot [A-Za-z0-9 ()]+?)\s{2,}")
@@ -53,6 +56,15 @@ _BANK_RE = re.compile(r"^\s*-\s*(\w+)\s*:\s*\[([^\]]*)\]", re.MULTILINE)
 
 def strip_ansi(text: str) -> str:
     return _ANSI_RE.sub("", text)
+
+
+def hex_dump(out: str) -> bytes:
+    """The bytes a hex dump printed at the shell spells. Xen writes to
+    the serial port dom0 reads commands on, and a long dump is traffic
+    enough for its uart watchdog to report itself into the middle of one,
+    so a hypervisor line goes before the hex is decoded. Anything else
+    that is not hex raises `ValueError`."""
+    return bytes.fromhex(_XEN_LINE_RE.sub("", out))
 
 
 def menu_titles(menu: str) -> list[str]:
