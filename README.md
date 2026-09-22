@@ -1,6 +1,6 @@
 # Boot matrix results
 
-Commit `f0b6ff881b9d`, run [7](https://github.com/iwanicki92/drtm-tests/actions/runs/35785121462), finished 2026-09-22 21:17:37.
+Commit `c9b801bfe42a`, run [8](https://github.com/iwanicki92/drtm-tests/actions/runs/35789807557), finished 2026-09-22 22:05:05.
 QEMU bundle `drtm-11.1.1-1` (11.1.1 (v11.1.1-43-gff57ce2273-dirty)), swtpm 0.7.3.
 
 Rows are the GRUB entries the suite boots, named as their fixtures
@@ -20,10 +20,10 @@ boot did, and the notes under the table what the suite expected of it.
 | `linux_alt_launch`    | ✅                   | ✅      | ✅          |
 | `linux`               | ✅                   | ✅      | ✅          |
 
-- `amd-drtm-test-image`: 85 passed.
-- `v0.5.2`: 80 passed, 5 xfailed.
+- `amd-drtm-test-image`: 88 passed.
+- `v0.5.2`: 83 passed, 5 xfailed.
     - `linux_launch` expected: panics in check_timer: SKL entered startup_32, GIF never set
-- `v0.5.3-rc1`: 80 passed, 5 xfailed.
+- `v0.5.3-rc1`: 83 passed, 5 xfailed.
     - `linux_launch` expected: panics in check_timer: SKL entered startup_32, GIF never set
 
 <details>
@@ -55,6 +55,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_grubcfg.py::test_an_entry_without_a_kernel_line_is_refused`                           | passed              | passed  | passed     |
 | `tests/test_grubcfg.py::test_the_boot_partition_is_the_efi_system_partition`                      | passed              | passed  | passed     |
 | `tests/test_grubcfg.py::test_a_disk_without_one_is_refused`                                       | passed              | passed  | passed     |
+| `tests/test_grubcfg.py::test_the_menu_is_read_in_the_environment_given`                           | passed              | passed  | passed     |
 | `tests/test_linux.py::test_launch_is_recorded_by_the_platform`                                    | passed              | xfailed | xfailed    |
 | `tests/test_linux.py::test_launch_is_seen_by_linux`                                               | passed              | xfailed | xfailed    |
 | `tests/test_linux.py::test_launch_brings_the_iommu_up`                                            | passed              | xfailed | xfailed    |
@@ -88,6 +89,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_qemu_binary.py::test_a_warning_named_in_rejects_is_reported`                          | passed              | passed  | passed     |
 | `tests/test_qemu_binary.py::test_a_missing_binary_is_reported`                                    | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_hold_what_the_environment_said_when_read`                   | passed              | passed  | passed     |
+| `tests/test_qemu_vm.py::test_settings_carry_a_copy_of_the_environment`                            | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_name_the_swtpm_programs_by_path`                            | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_keep_a_missing_program_by_name`                             | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_a_vm_keeps_the_settings_it_was_made_with`                            | passed              | passed  | passed     |
@@ -95,6 +97,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_qemu_vm.py::test_options_end_with_the_extra_arguments_given[extra1-expected1]`        | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_options_end_with_the_extra_arguments_given[None-expected2]`          | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_the_state_is_written_by_the_program_given`                           | passed              | passed  | passed     |
+| `tests/test_qemu_vm.py::test_the_program_runs_in_the_environment_given`                           | passed              | passed  | passed     |
 | `tests/test_report.py::test_a_cell_says_what_the_boot_did`                                        | passed              | passed  | passed     |
 | `tests/test_report.py::test_the_notes_say_what_was_expected`                                      | passed              | passed  | passed     |
 | `tests/test_report.py::test_a_release_without_results_is_a_missing_column`                        | passed              | passed  | passed     |
@@ -131,14 +134,14 @@ boot did, and the notes under the table what the suite expected of it.
 | `linux_alt_launch`    | ✅                   | ❌      | ❌          |
 | `linux`               | ✅                   | ✅      | ✅          |
 
-- `amd-drtm-test-image`: 85 passed.
-- `v0.5.2`: 64 passed, 21 xfailed.
+- `amd-drtm-test-image`: 88 passed.
+- `v0.5.2`: 67 passed, 21 xfailed.
     - `linux_launch` expected: classic SKL: the kernel's extend fails at a locked locality, it panics
     - `linux_legacy_launch` expected: classic SKL: the kernel's extend fails at a locked locality, it panics
     - `linux_alt_launch` expected: classic SKL: the kernel's extend fails at a locked locality, it panics
     - `xen_efi_launch` expected: classic SKL: no LAUNCH, so the PSP's locality locks stay on the TPM
     - `xen_mb2_launch` expected: classic SKL: no LAUNCH, so the PSP's locality locks stay on the TPM
-- `v0.5.3-rc1`: 64 passed, 21 xfailed.
+- `v0.5.3-rc1`: 67 passed, 21 xfailed.
     - `linux_launch` expected: classic SKL: the kernel's extend fails at a locked locality, it panics
     - `linux_legacy_launch` expected: classic SKL: the kernel's extend fails at a locked locality, it panics
     - `linux_alt_launch` expected: classic SKL: the kernel's extend fails at a locked locality, it panics
@@ -174,6 +177,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_grubcfg.py::test_an_entry_without_a_kernel_line_is_refused`                           | passed              | passed  | passed     |
 | `tests/test_grubcfg.py::test_the_boot_partition_is_the_efi_system_partition`                      | passed              | passed  | passed     |
 | `tests/test_grubcfg.py::test_a_disk_without_one_is_refused`                                       | passed              | passed  | passed     |
+| `tests/test_grubcfg.py::test_the_menu_is_read_in_the_environment_given`                           | passed              | passed  | passed     |
 | `tests/test_linux.py::test_launch_is_recorded_by_the_platform`                                    | passed              | xfailed | xfailed    |
 | `tests/test_linux.py::test_launch_is_seen_by_linux`                                               | passed              | xfailed | xfailed    |
 | `tests/test_linux.py::test_launch_brings_the_iommu_up`                                            | passed              | xfailed | xfailed    |
@@ -207,6 +211,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_qemu_binary.py::test_a_warning_named_in_rejects_is_reported`                          | passed              | passed  | passed     |
 | `tests/test_qemu_binary.py::test_a_missing_binary_is_reported`                                    | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_hold_what_the_environment_said_when_read`                   | passed              | passed  | passed     |
+| `tests/test_qemu_vm.py::test_settings_carry_a_copy_of_the_environment`                            | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_name_the_swtpm_programs_by_path`                            | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_keep_a_missing_program_by_name`                             | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_a_vm_keeps_the_settings_it_was_made_with`                            | passed              | passed  | passed     |
@@ -214,6 +219,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_qemu_vm.py::test_options_end_with_the_extra_arguments_given[extra1-expected1]`        | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_options_end_with_the_extra_arguments_given[None-expected2]`          | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_the_state_is_written_by_the_program_given`                           | passed              | passed  | passed     |
+| `tests/test_qemu_vm.py::test_the_program_runs_in_the_environment_given`                           | passed              | passed  | passed     |
 | `tests/test_report.py::test_a_cell_says_what_the_boot_did`                                        | passed              | passed  | passed     |
 | `tests/test_report.py::test_the_notes_say_what_was_expected`                                      | passed              | passed  | passed     |
 | `tests/test_report.py::test_a_release_without_results_is_a_missing_column`                        | passed              | passed  | passed     |
@@ -250,15 +256,15 @@ boot did, and the notes under the table what the suite expected of it.
 | `linux_alt_launch`    | ✅                   | ❌      | ❌          |
 | `linux`               | ✅                   | ✅      | ✅          |
 
-- `amd-drtm-test-image`: 85 passed.
-- `v0.5.2`: 68 passed, 17 xfailed.
+- `amd-drtm-test-image`: 88 passed.
+- `v0.5.2`: 71 passed, 17 xfailed.
     - `linux_launch` expected: panics in check_timer: SKL entered startup_32, GIF never set
     - `linux_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_legacy_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_alt_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `xen_efi_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `xen_mb2_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
-- `v0.5.3-rc1`: 68 passed, 17 xfailed.
+- `v0.5.3-rc1`: 71 passed, 17 xfailed.
     - `linux_launch` expected: panics in check_timer: SKL entered startup_32, GIF never set
     - `linux_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_legacy_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
@@ -295,6 +301,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_grubcfg.py::test_an_entry_without_a_kernel_line_is_refused`                           | passed              | passed  | passed     |
 | `tests/test_grubcfg.py::test_the_boot_partition_is_the_efi_system_partition`                      | passed              | passed  | passed     |
 | `tests/test_grubcfg.py::test_a_disk_without_one_is_refused`                                       | passed              | passed  | passed     |
+| `tests/test_grubcfg.py::test_the_menu_is_read_in_the_environment_given`                           | passed              | passed  | passed     |
 | `tests/test_linux.py::test_launch_is_recorded_by_the_platform`                                    | passed              | xfailed | xfailed    |
 | `tests/test_linux.py::test_launch_is_seen_by_linux`                                               | passed              | xfailed | xfailed    |
 | `tests/test_linux.py::test_launch_brings_the_iommu_up`                                            | passed              | xfailed | xfailed    |
@@ -328,6 +335,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_qemu_binary.py::test_a_warning_named_in_rejects_is_reported`                          | passed              | passed  | passed     |
 | `tests/test_qemu_binary.py::test_a_missing_binary_is_reported`                                    | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_hold_what_the_environment_said_when_read`                   | passed              | passed  | passed     |
+| `tests/test_qemu_vm.py::test_settings_carry_a_copy_of_the_environment`                            | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_name_the_swtpm_programs_by_path`                            | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_keep_a_missing_program_by_name`                             | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_a_vm_keeps_the_settings_it_was_made_with`                            | passed              | passed  | passed     |
@@ -335,6 +343,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_qemu_vm.py::test_options_end_with_the_extra_arguments_given[extra1-expected1]`        | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_options_end_with_the_extra_arguments_given[None-expected2]`          | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_the_state_is_written_by_the_program_given`                           | passed              | passed  | passed     |
+| `tests/test_qemu_vm.py::test_the_program_runs_in_the_environment_given`                           | passed              | passed  | passed     |
 | `tests/test_report.py::test_a_cell_says_what_the_boot_did`                                        | passed              | passed  | passed     |
 | `tests/test_report.py::test_the_notes_say_what_was_expected`                                      | passed              | passed  | passed     |
 | `tests/test_report.py::test_a_release_without_results_is_a_missing_column`                        | passed              | passed  | passed     |
@@ -371,8 +380,8 @@ boot did, and the notes under the table what the suite expected of it.
 | `linux_alt_launch`    | ✅                   | ❌      | ❌          |
 | `linux`               | ✅                   | ✅      | ✅          |
 
-- `amd-drtm-test-image`: 85 passed.
-- `v0.5.2`: 62 passed, 23 xfailed.
+- `amd-drtm-test-image`: 88 passed.
+- `v0.5.2`: 65 passed, 23 xfailed.
     - `linux_launch` expected: classic SKL: the kernel's extend fails at a locked locality, it panics
     - `linux_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_legacy_launch` expected: classic SKL: the kernel's extend fails at a locked locality, it panics
@@ -383,7 +392,7 @@ boot did, and the notes under the table what the suite expected of it.
     - `xen_efi_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `xen_mb2_launch` expected: classic SKL: no LAUNCH, so the PSP's locality locks stay on the TPM
     - `xen_mb2_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
-- `v0.5.3-rc1`: 62 passed, 23 xfailed.
+- `v0.5.3-rc1`: 65 passed, 23 xfailed.
     - `linux_launch` expected: classic SKL: the kernel's extend fails at a locked locality, it panics
     - `linux_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_legacy_launch` expected: classic SKL: the kernel's extend fails at a locked locality, it panics
@@ -424,6 +433,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_grubcfg.py::test_an_entry_without_a_kernel_line_is_refused`                           | passed              | passed  | passed     |
 | `tests/test_grubcfg.py::test_the_boot_partition_is_the_efi_system_partition`                      | passed              | passed  | passed     |
 | `tests/test_grubcfg.py::test_a_disk_without_one_is_refused`                                       | passed              | passed  | passed     |
+| `tests/test_grubcfg.py::test_the_menu_is_read_in_the_environment_given`                           | passed              | passed  | passed     |
 | `tests/test_linux.py::test_launch_is_recorded_by_the_platform`                                    | passed              | xfailed | xfailed    |
 | `tests/test_linux.py::test_launch_is_seen_by_linux`                                               | passed              | xfailed | xfailed    |
 | `tests/test_linux.py::test_launch_brings_the_iommu_up`                                            | passed              | xfailed | xfailed    |
@@ -457,6 +467,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_qemu_binary.py::test_a_warning_named_in_rejects_is_reported`                          | passed              | passed  | passed     |
 | `tests/test_qemu_binary.py::test_a_missing_binary_is_reported`                                    | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_hold_what_the_environment_said_when_read`                   | passed              | passed  | passed     |
+| `tests/test_qemu_vm.py::test_settings_carry_a_copy_of_the_environment`                            | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_name_the_swtpm_programs_by_path`                            | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_keep_a_missing_program_by_name`                             | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_a_vm_keeps_the_settings_it_was_made_with`                            | passed              | passed  | passed     |
@@ -464,6 +475,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_qemu_vm.py::test_options_end_with_the_extra_arguments_given[extra1-expected1]`        | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_options_end_with_the_extra_arguments_given[None-expected2]`          | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_the_state_is_written_by_the_program_given`                           | passed              | passed  | passed     |
+| `tests/test_qemu_vm.py::test_the_program_runs_in_the_environment_given`                           | passed              | passed  | passed     |
 | `tests/test_report.py::test_a_cell_says_what_the_boot_did`                                        | passed              | passed  | passed     |
 | `tests/test_report.py::test_the_notes_say_what_was_expected`                                      | passed              | passed  | passed     |
 | `tests/test_report.py::test_a_release_without_results_is_a_missing_column`                        | passed              | passed  | passed     |
@@ -493,15 +505,15 @@ boot did, and the notes under the table what the suite expected of it.
 | Entry                 | amd-drtm-test-image | v0.5.2 | v0.5.3-rc1 |
 |-----------------------|---------------------|--------|------------|
 | `xen_efi_launch`      | ✅                   | ❌      | ❌          |
-| `xen_efi`             | ✅                   | ✅      | ❌          |
+| `xen_efi`             | ✅                   | ✅      | ✅          |
 | `xen_mb2_launch`      | ✅                   | ❌      | ❌          |
 | `linux_launch`        | ✅                   | ❌      | ❌          |
 | `linux_legacy_launch` | ✅                   | ❌      | ❌          |
 | `linux_alt_launch`    | ✅                   | ❌      | ❌          |
 | `linux`               | ✅                   | ✅      | ✅          |
 
-- `amd-drtm-test-image`: 85 passed.
-- `v0.5.2`: 67 passed, 18 xfailed.
+- `amd-drtm-test-image`: 88 passed.
+- `v0.5.2`: 70 passed, 18 xfailed.
     - `linux_launch` expected: panics in check_timer: SKL entered startup_32, GIF never set
     - `linux_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_legacy_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
@@ -509,12 +521,11 @@ boot did, and the notes under the table what the suite expected of it.
     - `xen_efi_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `xen_mb2_launch` expected: the upstream Xen copies the MBI's digests for SHA-1 and SHA-256 alone
     - `xen_mb2_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
-- `v0.5.3-rc1`: 2 failed, 65 passed, 18 xfailed.
+- `v0.5.3-rc1`: 70 passed, 18 xfailed.
     - `linux_launch` expected: panics in check_timer: SKL entered startup_32, GIF never set
     - `linux_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_legacy_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_alt_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
-    - `xen_efi`: 2 failed unexpectedly
     - `xen_efi_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `xen_mb2_launch` expected: the upstream Xen copies the MBI's digests for SHA-1 and SHA-256 alone
     - `xen_mb2_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
@@ -548,6 +559,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_grubcfg.py::test_an_entry_without_a_kernel_line_is_refused`                           | passed              | passed  | passed     |
 | `tests/test_grubcfg.py::test_the_boot_partition_is_the_efi_system_partition`                      | passed              | passed  | passed     |
 | `tests/test_grubcfg.py::test_a_disk_without_one_is_refused`                                       | passed              | passed  | passed     |
+| `tests/test_grubcfg.py::test_the_menu_is_read_in_the_environment_given`                           | passed              | passed  | passed     |
 | `tests/test_linux.py::test_launch_is_recorded_by_the_platform`                                    | passed              | xfailed | xfailed    |
 | `tests/test_linux.py::test_launch_is_seen_by_linux`                                               | passed              | xfailed | xfailed    |
 | `tests/test_linux.py::test_launch_brings_the_iommu_up`                                            | passed              | xfailed | xfailed    |
@@ -575,12 +587,13 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_matrix.py::test_the_environment_names_its_configuration[env6-None]`                   | passed              | passed  | passed     |
 | `tests/test_matrix.py::test_a_cell_replaces_the_configuration_variables_and_the_local_image`      | passed              | passed  | passed     |
 | `tests/test_menu.py::test_titles_come_out_in_menu_order_once_each`                                | passed              | passed  | passed     |
-| `tests/test_menu.py::test_the_image_lists_every_entry_this_suite_knows`                           | passed              | passed  | failed     |
+| `tests/test_menu.py::test_the_image_lists_every_entry_this_suite_knows`                           | passed              | passed  | passed     |
 | `tests/test_qemu_binary.py::test_the_configured_binary_is_ours`                                   | passed              | passed  | passed     |
 | `tests/test_qemu_binary.py::test_a_refused_option_is_reported`                                    | passed              | passed  | passed     |
 | `tests/test_qemu_binary.py::test_a_warning_named_in_rejects_is_reported`                          | passed              | passed  | passed     |
 | `tests/test_qemu_binary.py::test_a_missing_binary_is_reported`                                    | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_hold_what_the_environment_said_when_read`                   | passed              | passed  | passed     |
+| `tests/test_qemu_vm.py::test_settings_carry_a_copy_of_the_environment`                            | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_name_the_swtpm_programs_by_path`                            | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_settings_keep_a_missing_program_by_name`                             | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_a_vm_keeps_the_settings_it_was_made_with`                            | passed              | passed  | passed     |
@@ -588,6 +601,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_qemu_vm.py::test_options_end_with_the_extra_arguments_given[extra1-expected1]`        | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_options_end_with_the_extra_arguments_given[None-expected2]`          | passed              | passed  | passed     |
 | `tests/test_qemu_vm.py::test_the_state_is_written_by_the_program_given`                           | passed              | passed  | passed     |
+| `tests/test_qemu_vm.py::test_the_program_runs_in_the_environment_given`                           | passed              | passed  | passed     |
 | `tests/test_report.py::test_a_cell_says_what_the_boot_did`                                        | passed              | passed  | passed     |
 | `tests/test_report.py::test_the_notes_say_what_was_expected`                                      | passed              | passed  | passed     |
 | `tests/test_report.py::test_a_release_without_results_is_a_missing_column`                        | passed              | passed  | passed     |
@@ -603,7 +617,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_xen.py::test_efi_launch_brings_the_iommu_up`                                          | passed              | passed  | passed     |
 | `tests/test_xen.py::test_efi_launch_log_replays_to_the_pcrs`                                      | passed              | passed  | passed     |
 | `tests/test_xen.py::test_efi_launch_log_declares_the_tpms_banks`                                  | passed              | xfailed | xfailed    |
-| `tests/test_xen.py::test_efi_normal_boot_launches_nothing`                                        | passed              | passed  | failed     |
+| `tests/test_xen.py::test_efi_normal_boot_launches_nothing`                                        | passed              | passed  | passed     |
 | `tests/test_xen.py::test_mb2_launch_is_recorded_by_the_platform`                                  | passed              | passed  | passed     |
 | `tests/test_xen.py::test_mb2_launch_is_seen_by_xen`                                               | passed              | passed  | passed     |
 | `tests/test_xen.py::test_mb2_launch_brings_the_iommu_up`                                          | passed              | passed  | passed     |
