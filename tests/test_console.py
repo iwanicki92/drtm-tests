@@ -27,6 +27,12 @@ def test_a_hypervisor_line_spliced_into_a_dump_is_dropped():
     assert hex_dump(f"00ff{UART_WARNING}\n1020") == b"\x00\xff\x10\x20"
 
 
+def test_a_hypervisor_line_spliced_into_the_middle_of_a_byte_is_dropped():
+    """What v0.5.3-rc1 did to the SLB dump: the line landed after an odd
+    number of digits, so the newline it left behind splits a pair."""
+    assert hex_dump(f"00f{UART_WARNING}\nf1020") == b"\x00\xff\x10\x20"
+
+
 def test_a_dump_that_is_not_hex_still_raises():
     with pytest.raises(ValueError):
         hex_dump("what happened")
