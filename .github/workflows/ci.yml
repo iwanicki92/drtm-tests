@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
       - uses: actions/cache@v6
         with:
           path: ~/.cache/pre-commit
@@ -49,7 +49,7 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
       - id: matrix
         run: |
           echo "matrix=$(uv run python -m drtmtest.matrix --releases '${{ inputs.releases }}')" \
@@ -73,7 +73,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             swtpm swtpm-tools mtools \
             libpixman-1-0 libfdt1 libglib2.0-0t64 libgcrypt20
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
       - uses: arduino/setup-task@v3
         with:
           version: 3.x
@@ -109,7 +109,7 @@ jobs:
       group: results-branch
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
       - uses: arduino/setup-task@v3
         with:
           version: 3.x
