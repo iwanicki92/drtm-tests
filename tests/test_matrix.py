@@ -61,7 +61,9 @@ def test_a_cell_replaces_the_configuration_variables_and_the_local_image(monkeyp
     assert "DRTM_PSP" not in env
     assert "DRTM_PCR_BANKS" not in env
     assert "DRTM_TB_IMAGE" not in env
-    assert matrix.environment("v0.5.2", "sha384")["DRTM_PCR_BANKS"] == "sha1,sha256,sha384"
+    assert (
+        matrix.environment("v0.5.2", "sha384")["DRTM_PCR_BANKS"] == "sha1,sha256,sha384"
+    )
     # The service under an upstream release is the classic session: its SKL
     # never talks to the service, so the launches are expected to fail.
     assert matrix.environment("v0.5.2", "psp")["DRTM_PSP"] == "classic"

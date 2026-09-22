@@ -75,7 +75,9 @@ def _configuration_title(name: str, results: list[dict]) -> str:
     if name in matrix.CONFIGURATIONS:
         return matrix.CONFIGURATIONS[name].title
     details = results[0]["details"]
-    return f"psp={details.get('psp') or 'off'}, banks={','.join(details.get('banks', []))}"
+    return (
+        f"psp={details.get('psp') or 'off'}, banks={','.join(details.get('banks', []))}"
+    )
 
 
 def _code(text: str) -> str:
@@ -86,9 +88,13 @@ def _table(header: list[str], rows: list[list[str]]) -> list[str]:
     widths = [
         max(len(cell) for cell in column) for column in zip(header, *rows, strict=True)
     ]
-    line = lambda cells: "| " + " | ".join(  # noqa: E731
-        cell.ljust(width) for cell, width in zip(cells, widths, strict=True)
-    ) + " |"
+    line = lambda cells: (
+        "| "
+        + " | ".join(
+            cell.ljust(width) for cell, width in zip(cells, widths, strict=True)
+        )
+        + " |"
+    )
     rule = "|" + "|".join("-" * (width + 2) for width in widths) + "|"
     return [line(header), rule, *(line(row) for row in rows)]
 

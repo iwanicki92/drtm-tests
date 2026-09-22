@@ -150,7 +150,10 @@ def test_the_sections_and_columns_follow_the_matrix_order(results: list[dict]):
 def test_the_header_names_the_commit_the_run_and_the_tools(results: list[dict]):
     page, _ = render(results, run="12", run_url="https://example.invalid/12")
     assert "Commit `0123456789ab`, run [12](https://example.invalid/12)," in page
-    assert "QEMU bundle `drtm-11.1.1-1` (11.1.1 (v11.1.1-43-gabcdef)), swtpm 0.7.3." in page
+    assert (
+        "QEMU bundle `drtm-11.1.1-1` (11.1.1 (v11.1.1-43-gabcdef)), swtpm 0.7.3."
+        in page
+    )
 
 
 def test_a_badge_is_green_only_when_every_configuration_passed(results: list[dict]):

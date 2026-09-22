@@ -13,7 +13,7 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from drtmtest import machine, qemu_vm, trenchboot
 

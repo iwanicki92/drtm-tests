@@ -61,7 +61,9 @@ def is_bundled(qemu: Path, cache_dir: Path = CACHE_DIR) -> bool:
 
 def _version(qemu: Path) -> str:
     """The version the binary reports, `11.1.1` for instance."""
-    out = subprocess.run([qemu, "--version"], capture_output=True, text=True)
+    out = subprocess.run(
+        [qemu, "--version"], capture_output=True, text=True, check=False
+    )
     words = out.stdout.split()
     if out.returncode != 0 or "version" not in words:
         raise RuntimeError(f"{qemu} --version said {out.stdout!r} {out.stderr!r}")
@@ -111,9 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="command")
     packer = subparsers.add_parser("pack", help="make a bundle from a build")
     packer.add_argument("build", type=Path, help="the QEMU build directory")
-    packer.add_argument(
-        "--tag", help="the release tag, drtm-<version>-1 by default"
-    )
+    packer.add_argument("--tag", help="the release tag, drtm-<version>-1 by default")
     packer.add_argument(
         "--out", type=Path, default=Path("dist"), help="where the tarball goes"
     )
