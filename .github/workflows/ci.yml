@@ -110,7 +110,9 @@ jobs:
 
   report:
     needs: [matrix, boot]
-    if: always() && needs.matrix.result == 'success'
+    # Runs after failed boots, whose results are the point, but not in a
+    # cancelled run, which always() would report and publish half done.
+    if: ${{ !cancelled() && needs.matrix.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
