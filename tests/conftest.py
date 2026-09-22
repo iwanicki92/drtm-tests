@@ -13,12 +13,13 @@ memory allow, so a fixture is usually just waiting on a boot in flight.
 
 import os
 import re
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
 
-from drtmtest import machine, trenchboot
+from drtmtest import grubcfg, machine, qemu_vm, trenchboot
 from drtmtest.console import LINUX_BANNER, XEN_BANNER, Console
 from drtmtest.dasharo import FIRMWARE, warmed_firmware
 from drtmtest.eventlog import Event, parse
@@ -39,20 +40,31 @@ GUEST_MEM_GIB = 2
 # the image's SKL is expected to use it: `None`, "on" or "classic".
 PSP = machine.psp_mode()
 
+# The banks the fresh TPM state of every boot has PCRs in.
+BANKS = qemu_vm.pcr_banks()
+
+# The upstream releases' SKL declares SHA-1 and SHA-256 in its log
+# whatever the TPM has, and their Xen's legacy path copies the multiboot
+# information's digests for those two banks alone.
+OTHER_BANKS = trenchboot.upstream() and BANKS != qemu_vm.PCR_BANKS
+MORE_BANKS = trenchboot.upstream() and bool(set(BANKS) - set(qemu_vm.PCR_BANKS))
+
 
 @dataclass(frozen=True)
 class Entry:
     """One GRUB entry: its title, which OS it boots, whether through a
     launch, and under which firmware. `broken` names why it is not expected
-    to boot on the upstream releases. An `optional` entry is one only some
-    images carry, and its tests skip where the menu lacks it."""
+    to boot on the upstream releases. An entry with a `parameter` is not
+    picked from the menu but typed at GRUB's shell: the titled entry's
+    commands, read off the image, with the parameter on the kernel's
+    line, so every image has it."""
 
     title: str
     os: str
     launch: bool
     firmware: str = "dasharo"
     broken: str | None = None
-    optional: bool = False
+    parameter: str | None = None
 
     @property
     def broken_reason(self) -> str | None:
@@ -64,7 +76,9 @@ class Entry:
         service with a classic SKL every launch
         is expected to fail: neither its GRUB nor the SKL talks to the
         service, so the TPM localities the SKL and the OS extend through
-        stay locked, and only the service's LAUNCH would open them."""
+        stay locked, and only the service's LAUNCH would open them. Linux
+        resets on a log whose banks are not the TPM's, which the upstream
+        SKL writes under any other banks."""
         if self.firmware == "seabios" and not trenchboot.legacy_bootable():
             return (
                 "the image has no legacy boot code, its wic carries the EFI boot alone"
@@ -73,6 +87,8 @@ class Entry:
             return "classic SKL: no LAUNCH, so the PSP's locality locks stay on the TPM"
         if self.broken is not None and trenchboot.upstream():
             return self.broken
+        if OTHER_BANKS and self.launch and self.os == "linux":
+            return "the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has"
         return None
 
     @property
@@ -103,16 +119,15 @@ ENTRIES: dict[str, Entry] = {
     "linux_legacy_launch": Entry(
         "Boot Linux with TrenchBoot", "linux", True, firmware="seabios"
     ),
-    # The Linux launch with one more kernel parameter, which the fork's
-    # images carry and the upstream releases do not. The SKL measures the
-    # command line into PCR 18, so this launch must differ from the plain
-    # one there and nowhere else.
+    # The legacy Linux launch with one more kernel parameter, typed at
+    # GRUB's shell. The SKL measures the command line into PCR 18, so this
+    # launch must differ from the plain one there and nowhere else.
     "linux_alt_launch": Entry(
-        "Boot Linux with TrenchBoot (alt)",
+        "Boot Linux with TrenchBoot",
         "linux",
         True,
         firmware="seabios",
-        optional=True,
+        parameter="drtmtest=alt",
     ),
     # Booted as the Linux control and the warming boot. A kernel booted
     # directly is what an IOMMU passing DMA through breaks, Xen's dom0 not.
@@ -128,14 +143,15 @@ class Boot:
     """What one boot left behind, gathered before the VM is torn down.
 
     `error` holds why a boot known to be broken did not get there, and is
-    `None` for one that reached the shell. `skipped` says why an optional
-    entry was not booted at all.
+    `None` for one that reached the shell.
 
-    `eventlog` is the DRTM event log as dumped from the guest, `slb_length`
-    and `slb_sha256` the SLB header's length and the digest of that many
-    bytes of the SKL the image booted, both gathered on launches only.
-    `iommu` is what the OS says of its IOMMU: Xen's `virt_caps`, or the
-    kernel's iommu class and groups. `cmdline` is Linux's `/proc/cmdline`.
+    `pcrs` are the SHA-256 PCRs 17 to 22, `bank_pcrs` the same in every
+    bank the TPM has, by bank in the TPM's order. `eventlog` is the DRTM
+    event log as dumped from the guest, `slb` the SLB of the SKL the image
+    booted, the header's length worth of it, what SKINIT measures, and
+    `slb_length` that length, all gathered on launches only. `iommu` is
+    what the OS says of its IOMMU: Xen's `virt_caps`, or the kernel's
+    iommu class and groups. `cmdline` is Linux's `/proc/cmdline`.
     """
 
     entry: Entry
@@ -143,17 +159,17 @@ class Boot:
     titles: list[str] = field(default_factory=list)
     record: dict = field(default_factory=dict)
     pcrs: dict[int, str] = field(default_factory=dict)
+    bank_pcrs: dict[str, dict[int, str]] = field(default_factory=dict)
     xen_log: str = ""
     dmesg: str = ""
     securityfs: str = ""
     console: str = ""
     eventlog: bytes = b""
+    slb: bytes = b""
     slb_length: int = 0
-    slb_sha256: str = ""
     iommu: str = ""
     cmdline: str = ""
     error: Exception | None = None
-    skipped: str | None = None
 
     @property
     def events(self) -> list[Event]:
@@ -231,16 +247,18 @@ def _event_log(console: Console, entry: Entry, capture: str) -> bytes:
         raise RuntimeError(f"the event log dump is not hex: {out[:200]!r}") from None
 
 
-def _slb(console: Console) -> tuple[int, str]:
-    """The SLB header's length field and the SHA-256 of that many bytes of
-    the SKL the image booted, what SKINIT measures. An image with both
-    builds boots the AMDSL one under the service."""
+def _slb(console: Console) -> tuple[int, bytes]:
+    """The SLB header's length field and that many bytes of the SKL the
+    image booted, what SKINIT measures. An image with both builds boots
+    the AMDSL one under the service."""
     skl = "/boot/skl-amdsl.bin" if PSP == "on" else "/boot/skl.bin"
     header = console.run(f"xxd -p -s 2 -l 2 {skl}")
     length = int.from_bytes(bytes.fromhex(header), "little")
-    # BusyBox head has no -c, dd reads the same bytes.
-    digest = console.run(f"dd if={skl} bs={length} count=1 2>/dev/null | sha256sum")
-    return length, digest.split()[0]
+    out = console.run(f"xxd -p -l {length} {skl} | tr -d '\\n'; echo")
+    try:
+        return length, bytes.fromhex(out)
+    except ValueError:
+        raise RuntimeError(f"the SLB dump is not hex: {out[:200]!r}") from None
 
 
 def _boot(name: str, log_dir: Path) -> Boot:
@@ -256,13 +274,14 @@ def _boot(name: str, log_dir: Path) -> Boot:
             tpm="tis",
         ) as vm:
             console = Console(vm, BOOT_TIMEOUT)
-            try:
+            if entry.parameter is None:
                 boot.titles = console.select_entry(entry.title, boot_prompt=dasharo)
-            except LookupError as e:
-                if not entry.optional:
-                    raise
-                boot.skipped = str(e)
-                return boot
+            else:
+                commands = grubcfg.commands(
+                    trenchboot.unpacked_image(), entry.title, entry.parameter
+                )
+                (log_dir / "grub-commands.txt").write_text("\n".join(commands) + "\n")
+                boot.titles = console.type_entry(commands, boot_prompt=dasharo)
             console.wait_for_login(entry.banner)
             console.login()
             # The kernel's console messages otherwise land in the middle
@@ -271,6 +290,10 @@ def _boot(name: str, log_dir: Path) -> Boot:
             assert vm.qmp is not None
             boot.record = vm.qmp.execute("query-amd-drtm")
             boot.pcrs = console.pcrs(list(range(17, 23)))
+            boot.bank_pcrs = {
+                bank: console.pcrs(list(range(17, 23)), bank)
+                for bank in console.pcr_banks()
+            }
             if xen:
                 # For the log only: the console ring can lose early lines,
                 # so tests read Xen's lines off the serial capture instead.
@@ -283,7 +306,7 @@ def _boot(name: str, log_dir: Path) -> Boot:
             boot.securityfs = console.run("ls /sys/kernel/security/slaunch 2>&1")
             if entry.launch:
                 boot.eventlog = _event_log(console, entry, vm.capture)
-                boot.slb_length, boot.slb_sha256 = _slb(console)
+                boot.slb_length, boot.slb = _slb(console)
             boot.console = vm.capture
     except Exception as e:
         if entry.broken_reason is None:
@@ -317,9 +340,11 @@ def _prepare(names: list[str]) -> None:
 
 def _check() -> str | None:
     reason = machine.unsupported_binary()
-    if reason is None:
-        return None
-    return f"This suite needs the QEMU drtm branch, see docs/testing.md: {reason}"
+    if reason is not None:
+        return f"This suite needs the QEMU drtm branch, see docs/testing.md: {reason}"
+    if shutil.which("mtype") is None:
+        return "This suite needs mtools on PATH, it reads grub.cfg off the image"
+    return None
 
 
 SESSION = BootSession(
@@ -332,6 +357,7 @@ SESSION = BootSession(
     header=lambda: [
         f"image:       {trenchboot.description()}",
         f"psp:         {PSP or 'off'}",
+        f"banks:       {','.join(BANKS)}",
     ],
 )
 
@@ -344,8 +370,6 @@ def _entry_fixture(name: str):
     @pytest.fixture(scope="session", name=name)
     def wait_for_boot() -> Boot:
         boot = SESSION.booted(name)
-        if boot.skipped is not None:
-            pytest.skip(boot.skipped)
         if boot.error is not None:
             pytest.fail(f"{boot.entry.title!r} did not reach the shell: {boot.error}")
         return boot
@@ -371,3 +395,27 @@ def expects_boot(name: str):
     pass."""
     reason = ENTRIES[name].broken_reason
     return pytest.mark.xfail(reason is not None, reason=reason or "", strict=True)
+
+
+def expects_skls_banks():
+    """Marks a test on the banks the log declares: the upstream SKL
+    declares SHA-1 and SHA-256 whatever the TPM has, so on those releases
+    the test must fail under any other banks."""
+    return pytest.mark.xfail(
+        OTHER_BANKS,
+        reason="the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has",
+        strict=True,
+    )
+
+
+def expects_xens_mbi_digest():
+    """Marks the MB2 replay: the upstream Xen's early code copies the
+    multiboot information's digests the TPM returns until one the log
+    does not declare, and the upstream log declares SHA-1 and SHA-256,
+    so in a bank beyond those the PCR 18 record has no digest and the
+    replay misses. With fewer banks every digest is copied."""
+    return pytest.mark.xfail(
+        MORE_BANKS,
+        reason="the upstream Xen copies the MBI's digests for SHA-1 and SHA-256 alone",
+        strict=True,
+    )

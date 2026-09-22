@@ -23,8 +23,7 @@ CACHE_DIR = Path(__file__).resolve().parent.parent / "dl-cache"
 class Release:
     """One pinned image. An `upstream` one is a meta-trenchboot release,
     with the breakage the entries mark. The fork's test image carries the
-    fixes, both SKL builds and the alt Linux entry, and nothing is
-    expected broken on it."""
+    fixes and both SKL builds, and nothing is expected broken on it."""
 
     asset: Asset
     upstream: bool = True

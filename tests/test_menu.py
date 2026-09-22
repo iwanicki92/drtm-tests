@@ -24,11 +24,15 @@ def test_titles_come_out_in_menu_order_once_each():
     ]
 
 
+# The fork's image lists the alt Linux launch as an entry of its own. The
+# suite types that launch at GRUB's shell instead, on every image.
+FORK_ENTRIES = {"Boot Linux with TrenchBoot (alt)"}
+
+
 def test_the_image_lists_every_entry_this_suite_knows(xen_efi: Boot):
     """Every entry the suite relies on is in the menu, and nothing the
-    suite does not know is. The optional ones may be missing."""
+    suite does not know is."""
     titles = set(xen_efi.titles)
     known = {entry.title for entry in ENTRIES.values()}
-    required = {entry.title for entry in ENTRIES.values() if not entry.optional}
-    assert required <= titles, required - titles
-    assert titles <= known, titles - known
+    assert known <= titles, known - titles
+    assert titles <= known | FORK_ENTRIES, titles - known

@@ -7,10 +7,11 @@ through SeaBIOS, and the normal Linux boot: the kernel booted directly is
 the one that found no disk when the launch machine's IOMMU passed DMA
 through, so it stays under test."""
 
-from conftest import Boot, expects_boot
+from conftest import Boot, expects_boot, expects_skls_banks
 from test_xen import (
     assert_iommu_up,
     assert_launched,
+    assert_log_declares_the_tpms_banks,
     assert_log_replays,
     assert_not_launched,
 )
@@ -49,6 +50,12 @@ def test_launch_log_replays_to_the_pcrs(linux_launch: Boot):
     assert_log_replays(linux_launch)
 
 
+@expects_boot("linux_launch")
+@expects_skls_banks()
+def test_launch_log_declares_the_tpms_banks(linux_launch: Boot):
+    assert_log_declares_the_tpms_banks(linux_launch)
+
+
 @expects_boot("linux_legacy_launch")
 def test_legacy_launch_is_recorded_by_the_platform(linux_legacy_launch: Boot):
     assert_launched(linux_legacy_launch)
@@ -69,6 +76,12 @@ def test_legacy_launch_log_replays_to_the_pcrs(linux_legacy_launch: Boot):
     assert_log_replays(linux_legacy_launch)
 
 
+@expects_boot("linux_legacy_launch")
+@expects_skls_banks()
+def test_legacy_launch_log_declares_the_tpms_banks(linux_legacy_launch: Boot):
+    assert_log_declares_the_tpms_banks(linux_legacy_launch)
+
+
 @expects_boot("linux_alt_launch")
 def test_alt_launch_is_recorded_by_the_platform(linux_alt_launch: Boot):
     assert_launched(linux_alt_launch)
@@ -83,6 +96,12 @@ def test_alt_launch_is_seen_by_linux(linux_alt_launch: Boot):
 @expects_boot("linux_alt_launch")
 def test_alt_launch_log_replays_to_the_pcrs(linux_alt_launch: Boot):
     assert_log_replays(linux_alt_launch)
+
+
+@expects_boot("linux_alt_launch")
+@expects_skls_banks()
+def test_alt_launch_log_declares_the_tpms_banks(linux_alt_launch: Boot):
+    assert_log_declares_the_tpms_banks(linux_alt_launch)
 
 
 @expects_boot("linux_alt_launch")

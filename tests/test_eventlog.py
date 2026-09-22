@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from drtmtest.eventlog import EV_NO_ACTION, EV_SLAUNCH, Event, parse, replay
+from drtmtest.eventlog import EV_NO_ACTION, EV_SLAUNCH, Event, banks, parse, replay
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -56,6 +56,10 @@ def test_the_xen_log_is_the_skls_events_then_xens():
     ]
     assert all(e.type == EV_SLAUNCH for e in events)
     assert set(events[0].digests) == {"sha1", "sha256"}
+
+
+def test_the_header_declares_the_banks_in_its_order():
+    assert banks(fixture("xen")) == ["sha1", "sha256"]
 
 
 @pytest.mark.parametrize("alg", ["sha256", "sha1"])

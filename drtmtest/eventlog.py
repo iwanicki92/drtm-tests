@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""The DRTM event log as the SKL writes it: a TCG2 log with the SHA-1 and
-SHA-256 banks, one `TCG_PCR_EVENT2` per extend, and a replay of it.
+"""The DRTM event log as the SKL writes it: a TCG2 log declaring the TPM's
+banks, one `TCG_PCR_EVENT2` per extend, and a replay of it.
 
 Xen reserves the log where the SKL left it and dom0 reads it from
 `/dev/mem`. Linux exposes it in securityfs. Either way the region is
@@ -44,6 +44,11 @@ def _algorithms(raw: bytes) -> dict[int, int]:
         alg, digest_size = struct.unpack_from("<HH", spec, 28 + 4 * i)
         algorithms[alg] = digest_size
     return algorithms
+
+
+def banks(raw: bytes) -> list[str]:
+    """The banks the header declares, by name, in its order."""
+    return [_ALG_NAMES.get(alg, hex(alg)) for alg in _algorithms(raw + bytes(16))]
 
 
 def parse(raw: bytes) -> list[Event]:

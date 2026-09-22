@@ -34,7 +34,7 @@ meta-trenchboot paths and release tags. Never a private notes repository.
 
 - `uv run pytest` runs the suite, `uv run tb-boot` boots by hand. Both need
     `DRTM_QEMU_BINARY` pointing at the drtm branch's `qemu-system-x86_64`
-    and `swtpm` on `PATH`.
+    and `swtpm` on `PATH`, the suite `mtype` too.
 - `pre-commit run --all-files` lints everything (`pre-commit install`
     once).
 - `task test`, `task boot` and `task lint` wrap the above.

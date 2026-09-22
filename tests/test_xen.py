@@ -5,6 +5,7 @@
 """The Xen entries: a launch through SKINIT on the EFI path under Dasharo,
 its control boot without one, and the MB2 launch under SeaBIOS."""
 
+import hashlib
 import re
 
 from conftest import (
@@ -14,9 +15,15 @@ from conftest import (
     PSP,
     Boot,
     expects_boot,
+    expects_skls_banks,
+    expects_xens_mbi_digest,
 )
 
-from drtmtest.eventlog import EV_SLAUNCH, replay
+from drtmtest.eventlog import EV_SLAUNCH, Event, banks, replay
+
+# The digests the SKL computes itself. In any other bank its SKINIT record
+# carries the TCG placeholder, though the launch measured the SLB there.
+SKL_HASHES = ("sha1", "sha256")
 
 # What Xen prints while taking over from the loader, on hardware and here.
 XEN_RESERVES_EVENT_LOG = "SLAUNCH: reserving event log"
@@ -73,18 +80,41 @@ def assert_seen_by_xen(boot: Boot) -> None:
 
 
 def assert_log_replays(boot: Boot) -> None:
-    """The event log the SKL left accounts for the DRTM PCRs: it opens
-    with SKINIT's measurement of the SLB, which is the digest of the SKL
-    the image ships over the length its header gives, and replaying its
-    extends reaches what the TPM reads for PCR 17 and 18."""
+    """The event log the SKL left accounts for the DRTM PCRs in every
+    bank the TPM has: it opens with SKINIT's measurement of the SLB,
+    which is the digest of the SKL the image ships over the length its
+    header gives, and replaying its extends reaches what the TPM reads
+    for PCR 17 and 18. SKINIT's record is replayed with the SLB's digest
+    in every bank, since the SKL logs the placeholder where it cannot
+    hash while the launch measured the SLB there too."""
     events = boot.events
     assert events, "no event log was dumped"
     first = events[0]
     assert (first.pcr, first.type, first.data) == (17, EV_SLAUNCH, b"SKINIT"), first
-    assert first.digests["sha256"] == boot.slb_sha256, (first, boot.slb_sha256)
     assert boot.record["slb-length"] == boot.slb_length, boot.record
-    for pcr in (17, 18):
-        assert replay(events, pcr) == boot.pcrs[pcr], (pcr, events)
+    slb = {
+        bank: hashlib.new(bank, boot.slb).hexdigest()
+        for bank in boot.bank_pcrs
+        if bank in hashlib.algorithms_available
+    }
+    assert slb, boot.bank_pcrs
+    for bank in SKL_HASHES:
+        if bank in slb:
+            assert first.digests[bank] == slb[bank], (first, slb)
+    measured = [Event(first.pcr, first.type, slb, first.data), *events[1:]]
+    for bank in slb:
+        for pcr in (17, 18):
+            got = boot.bank_pcrs[bank][pcr]
+            assert replay(measured, pcr, bank) == got, (bank, pcr, events)
+
+
+def assert_log_declares_the_tpms_banks(boot: Boot) -> None:
+    """The log's header declares the banks the TPM has PCRs in, no more
+    and no fewer, which Linux checks before it takes the log."""
+    assert set(banks(boot.eventlog)) == set(boot.bank_pcrs), (
+        banks(boot.eventlog),
+        list(boot.bank_pcrs),
+    )
 
 
 def assert_iommu_up(boot: Boot) -> None:
@@ -125,6 +155,12 @@ def test_efi_launch_log_replays_to_the_pcrs(xen_efi_launch: Boot):
     assert_log_replays(xen_efi_launch)
 
 
+@expects_boot("xen_efi_launch")
+@expects_skls_banks()
+def test_efi_launch_log_declares_the_tpms_banks(xen_efi_launch: Boot):
+    assert_log_declares_the_tpms_banks(xen_efi_launch)
+
+
 def test_efi_normal_boot_launches_nothing(xen_efi: Boot):
     assert_not_launched(xen_efi)
     assert "SLAUNCH" not in xen_efi.xen_lines, xen_efi.xen_lines
@@ -146,5 +182,12 @@ def test_mb2_launch_brings_the_iommu_up(xen_mb2_launch: Boot):
 
 
 @expects_boot("xen_mb2_launch")
+@expects_xens_mbi_digest()
 def test_mb2_launch_log_replays_to_the_pcrs(xen_mb2_launch: Boot):
     assert_log_replays(xen_mb2_launch)
+
+
+@expects_boot("xen_mb2_launch")
+@expects_skls_banks()
+def test_mb2_launch_log_declares_the_tpms_banks(xen_mb2_launch: Boot):
+    assert_log_declares_the_tpms_banks(xen_mb2_launch)

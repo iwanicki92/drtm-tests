@@ -15,10 +15,11 @@ uv run pytest -k xen_efi      # one entry's tests, and only its boot
 uv run pytest --collect-only  # what would run, booting nothing
 ```
 
-`swtpm` and `swtpm_setup` (Debian: `swtpm-tools`) must be on `PATH`. The
-session refuses a QEMU that rejects `-machine q35,amd-drtm=on` before
-booting anything. `DRTM_QEMU_ACCEL=kvm` switches to KVM, which boots the
-normal entries faster and cannot run the launches.
+`swtpm` and `swtpm_setup` (Debian: `swtpm-tools`) and `mtype` (`mtools`)
+must be on `PATH`. The session refuses a QEMU that rejects
+`-machine q35,amd-drtm=on` before booting anything. `DRTM_QEMU_ACCEL=kvm`
+switches to KVM, which boots the normal entries faster and cannot run the
+launches.
 
 Only the boots the collected tests need are started, and they start at
 collection, so a run of one test boots once and a full run has every boot
@@ -26,23 +27,27 @@ in flight before the first assertion.
 
 ## The entries
 
-The image's GRUB menu lists six entries, and a fork build a seventh.
-Each has a fixture of the same name in `tests/conftest.py`, and a test
-takes the fixture of the boot it asserts on. Only entries a test names
-are booted, so a run boots five on an upstream release and six on the
-fork's image:
-the launches, the Xen EFI control and the Linux control. The Linux one is
-kept because a kernel booted directly is what an IOMMU that passes DMA
-through breaks, while Xen's dom0 never notices. The normal MB2 entry only
-serves the menu check.
+The image's GRUB menu lists six entries, and the suite boots one more
+of its own. Each has a fixture of the same name in `tests/conftest.py`,
+and a test takes the fixture of the boot it asserts on. Only entries a
+test names are booted, so a full run boots six: the launches, the Xen
+EFI control and the Linux control. The Linux one is kept because a
+kernel booted directly is what an IOMMU that passes DMA through breaks,
+while Xen's dom0 never notices. The normal MB2 entry only serves the
+menu check.
 
-The seventh, `Boot Linux with TrenchBoot (alt)`, is the Linux launch
-with `drtmtest=alt` on the kernel command line, which the fork's images
-carry and the upstream releases do not. Its tests skip on an image
-without it.
-The two launches share the SKL and the kernel, so PCR 17 has to come out
-the same and PCR 18 has to differ, with the log's command line event the
-one that moved.
+The boot of the suite's own, `linux_alt_launch`, is the legacy Linux
+launch with `drtmtest=alt` added to the kernel command line. It is not
+in any menu: the harness reads `grub.cfg` off the image's boot partition
+with `mtype`, takes the entry's commands, appends the parameter to the
+`linux` line, and types them at GRUB's shell, entered from the menu with
+`c`, then `boot`. The functions the config defines are GRUB's by then,
+so the commands run as the entry would. The commands typed are kept as
+`grub-commands.txt` in the boot's log directory. The two launches share
+the SKL and the kernel, so PCR 17 has to come out the same and PCR 18
+has to differ, with the log's command line event the one that moved.
+The fork's image lists this launch as an entry of its own as well, which
+the menu check allows and nothing boots.
 
 The MB2 entries are legacy boots and run under QEMU's SeaBIOS, the way a
 BIOS board would run them. Under Dasharo's UEFI the MB2 launch runs SKL
@@ -57,7 +62,7 @@ and then stops. The EFI entries and the Linux ones run under Dasharo.
 | `linux_legacy_launch` | Boot Linux with TrenchBoot       | SeaBIOS  | launches                 |
 | `linux`               | Boot Linux normally              | Dasharo  | boots, control           |
 | `xen_mb2`             | Boot Xen normally (MB2)          | SeaBIOS  | not booted               |
-| `linux_alt_launch`    | Boot Linux with TrenchBoot (alt) | SeaBIOS  | not in the menu, skipped |
+| `linux_alt_launch`    | Boot Linux with TrenchBoot, alt  | SeaBIOS  | launches                 |
 
 Entries are selected by title from the menu GRUB draws, not by a fixed
 index, so a new entry in the image moves nothing here. The tests of an
@@ -112,8 +117,21 @@ every hash it implements, SHA-1 first, and the copy stopped at the
 first one the log did not declare. With no SHA-1 bank the PCR 18 event
 kept the placeholder in SHA-256 and the replay missed on `sha256`
 alone. The image's Xen carries a patch that skips such digests, and the
-replay matches with SHA-256 alone since. The harness replays SHA-256
-only.
+replay matches with SHA-256 alone since.
+
+Two tests per launch cover this. The log's header must declare the
+banks the TPM has PCRs in, as `tpm2_getcap pcrs` lists them, no more
+and no fewer. And the replay runs in every bank the TPM has, with
+`SKINIT`'s record taken as the SLB's digest in that bank, computed by
+the harness from the SLB bytes the boot dumps, since the log carries
+the placeholder where the SKL cannot hash while the launch measured the
+SLB there too. The log's own `SKINIT` digest is checked against the
+SLB's in SHA-1 and SHA-256, the banks the SKL hashes for. On the
+upstream releases under any banks but the default two, the Linux
+launches are expected not to boot and the bank test is expected to
+fail, and with a bank beyond those two the MB2 replay is expected to
+miss in it, since their Xen copies the multiboot information's digests
+for SHA-1 and SHA-256 alone. `tests/conftest.py` holds the three.
 
 The first `AMDSL` build taught the harness two things. Its wic carried
 the EFI boot alone, with a stub in the master boot record that boots
@@ -166,7 +184,8 @@ Once the shell answers, before the VM is torn down:
     service its `psp` record: whether it was kicked, what its `LAUNCH`
     decided, what it found of the SKL's signature, and the last command
     with its status.
-- PCRs 17 to 22 from `tpm2_pcrread`, in one read.
+- PCRs 17 to 22 from `tpm2_pcrread`, in SHA-256 and then in every bank
+    the TPM has, as `tpm2_getcap pcrs` lists them.
 - Xen's `slaunch` and `drtm` lines from `xl dmesg`, the same from `dmesg`,
     and the listing of `/sys/kernel/security/slaunch`.
 - What the OS says of its IOMMU: Xen's `virt_caps` line from `xl info`,
@@ -177,8 +196,8 @@ Once the shell answers, before the VM is torn down:
     and under Xen dom0 reads the range Xen's "reserving event log" line
     names out of `/dev/mem`. With it, the length field of the SLB header
     of the SKL the boot ran, `/boot/skl.bin` or under the service
-    `/boot/skl-amdsl.bin`, and the SHA-256 of that many bytes of it, what
-    `SKINIT` measures.
+    `/boot/skl-amdsl.bin`, and that many bytes of it, what `SKINIT`
+    measures, dumped the same way.
 - The whole console capture. The Xen tests read the hypervisor's lines
     off it, the ones tagged `(XEN)`, rather than off `xl dmesg`: the
     console ring is small and a verbose boot pushes the early lines out

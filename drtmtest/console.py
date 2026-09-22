@@ -28,6 +28,9 @@ LINUX_BANNER = "Linux version"
 LOGIN_PROMPT = "tb login:"
 SHELL_PROMPT = "root@tb:~#"
 
+# GRUB's own shell, entered from the menu with `c`.
+GRUB_PROMPT = "grub> "
+
 # What ends a boot early. Xen's panic, Linux's, and the strict-mode stop
 # QEMU reports through the run state rather than the console.
 FAILURES = ("Panic on CPU", "Kernel panic")
@@ -38,7 +41,9 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][A-Z0-9]|\x1b[=>]")
 # A menu entry as GRUB draws it: an optional highlight marker, the title,
 # then the padding to the box's edge.
 _TITLE_RE = re.compile(r"\*?(Boot [A-Za-z0-9 ()]+?)\s{2,}")
-_PCR_RE = re.compile(r"(\d+)\s*: 0x([0-9A-Fa-f]{64})")
+_PCR_RE = re.compile(r"(\d+)\s*: 0x([0-9A-Fa-f]+)")
+# One bank in `tpm2_getcap pcrs`, with the PCRs it has, if any.
+_BANK_RE = re.compile(r"^\s*-\s*(\w+)\s*:\s*\[([^\]]*)\]", re.MULTILINE)
 
 
 def strip_ansi(text: str) -> str:
@@ -66,21 +71,40 @@ class Console:
     boot_timeout: float
     command_timeout: float = 60.0
 
-    def select_entry(self, title: str, boot_prompt: bool = True) -> list[str]:
-        """Answers the firmware, then picks `title` in GRUB's menu.
-
-        `boot_prompt` is Dasharo's, which SeaBIOS never shows. The index
-        comes from the titles the menu shows, so the image decides where
-        an entry sits. Returns the titles for the record.
-        """
+    def _menu(self, boot_prompt: bool) -> list[str]:
+        """Answers the firmware and waits for GRUB's menu, whose titles it
+        returns. `boot_prompt` is Dasharo's, which SeaBIOS never shows."""
         if boot_prompt:
             self.vm.expect(BOOT_PROMPT, self.boot_timeout)
             self.vm.send(b"\r")
         menu = self.vm.expect(MENU_READY, self.boot_timeout)
-        titles = menu_titles(menu)
+        return menu_titles(menu)
+
+    def select_entry(self, title: str, boot_prompt: bool = True) -> list[str]:
+        """Answers the firmware, then picks `title` in GRUB's menu.
+
+        The index comes from the titles the menu shows, so the image
+        decides where an entry sits. Returns the titles for the record.
+        """
+        titles = self._menu(boot_prompt)
         if title not in titles:
             raise LookupError(f"no GRUB entry {title!r}, the menu lists {titles}")
         self.vm.send(KEY_DOWN * titles.index(title) + b"\r")
+        return titles
+
+    def type_entry(self, commands: list[str], boot_prompt: bool = True) -> list[str]:
+        """Answers the firmware, then runs `commands` at GRUB's shell in
+        place of a menu entry and boots what they loaded. Returns the
+        menu's titles, as `select_entry` does."""
+        titles = self._menu(boot_prompt)
+        self.vm.send(b"c")
+        self.vm.expect(GRUB_PROMPT, self.command_timeout)
+        # GRUB echoes every character between cursor moves, so the echo
+        # is not matched, only the prompt that follows the command's run.
+        for command in commands:
+            self.vm.send(command.encode() + b"\r")
+            self.vm.expect(GRUB_PROMPT, self.command_timeout)
+        self.vm.send(b"boot\r")
         return titles
 
     def wait_for_login(self, banner: str) -> None:
@@ -107,11 +131,21 @@ class Console:
         """One SHA-256 PCR as 64 hex digits, lower case."""
         return self.pcrs([index])[index]
 
-    def pcrs(self, indices: list[int]) -> dict[int, str]:
-        """SHA-256 PCRs by index, each as 64 hex digits, lower case, from
+    def pcr_banks(self) -> list[str]:
+        """The banks the TPM has PCRs in, in its order, as `tpm2_getcap
+        pcrs` lists them. A bank the TPM knows but has no PCRs in is
+        listed empty and left out."""
+        out = self.run("tpm2_getcap pcrs")
+        banks = [bank for bank, pcrs in _BANK_RE.findall(out) if pcrs.strip()]
+        if not banks:
+            raise LookupError(f"no PCR banks in {out!r}")
+        return banks
+
+    def pcrs(self, indices: list[int], bank: str = "sha256") -> dict[int, str]:
+        """PCRs of `bank` by index, each as hex digits, lower case, from
         one read."""
         selection = ",".join(str(i) for i in indices)
-        out = self.run(f"tpm2_pcrread sha256:{selection}")
+        out = self.run(f"tpm2_pcrread {bank}:{selection}")
         found = {int(i): value.lower() for i, value in _PCR_RE.findall(out)}
         missing = [i for i in indices if i not in found]
         if missing:

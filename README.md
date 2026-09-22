@@ -30,6 +30,8 @@ needs that build. Point `DRTM_QEMU_BINARY` at it.
 - `swtpm` and `swtpm-tools` on `PATH`. The `emulator` backend is the only
     one carrying the locality 4 hash sequence, and every boot seeds a
     fresh TPM state with `swtpm_setup`.
+- `mtools` on `PATH`, to read `grub.cfg` off the image without mounting
+    it.
 - `uv`, which installs the Python side on the first run.
 - About 1.5 GB under `dl-cache/` for the firmware and the unpacked image,
     and under a megabyte of logs per run.
@@ -46,8 +48,8 @@ The first run downloads the Dasharo firmware and the image release into
 writes its logs to a numbered directory under `logs/`.
 
 The image is the fork's `amd-drtm-test-image` release by default, a
-build of its `amd-drtm` branch with both SKL builds, the alt Linux entry
-and the fixes the upstream releases lack. Set `DRTM_TB_RELEASE` to
+build of its `amd-drtm` branch with both SKL builds and the fixes the
+upstream releases lack. Set `DRTM_TB_RELEASE` to
 another tag pinned in `drtmtest/trenchboot.py` to boot that one instead,
 an upstream release such as `v0.5.2` for instance. Each release keeps
 its own download and unpacked disk in `dl-cache/`.
