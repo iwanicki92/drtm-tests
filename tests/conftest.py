@@ -37,12 +37,33 @@ BOOT_TIMEOUT = 420.0
 # and it is what lets six boots share a 16 GB host.
 GUEST_MEM_GIB = 2
 
+# Everything a boot takes from the environment is read here, at import on
+# the main thread, and handed to the boot. The boots run on the pool's
+# threads while the unit tests run on this one, and those patch the
+# environment: a boot that read it at that moment booted a TPM with the
+# test's banks. The image is the exception, unpacked by `_prepare`.
+
 # Whether the boots get the Secure Processor's DRTM service, and whether
 # the image's SKL is expected to use it: `None`, "on" or "classic".
 PSP = machine.psp_mode()
 
+# The QEMU binary, the accelerator, the TPM's banks and swtpm's log level.
+SETTINGS = qemu_vm.Settings.from_environment()
+
 # The banks the fresh TPM state of every boot has PCRs in.
-BANKS = qemu_vm.pcr_banks()
+BANKS = SETTINGS.banks
+
+# What `DRTM_QEMU_ARGS` appends to every boot.
+EXTRA_ARGS = machine.extra_args()
+
+# The image every boot runs, set by `_prepare` before the pool starts.
+_IMAGE: Path | None = None
+
+
+def _image() -> Path:
+    assert _IMAGE is not None, "the image is unpacked by _prepare, ahead of the pool"
+    return _IMAGE
+
 
 # The upstream releases' SKL declares SHA-1 and SHA-256 in its log
 # whatever the TPM has, and their Xen's legacy path copies the multiboot
@@ -206,10 +227,11 @@ def _warmed_firmware() -> Path:
         log_dir = SESSION.run_log_dir() / "boot-warm-firmware"
         with QemuVm(
             log_dir,
-            machine.options(trenchboot.unpacked_image()),
+            machine.options(_image(), extra=EXTRA_ARGS),
             firmware=FIRMWARE.fetch(trenchboot.CACHE_DIR),
             tpm="tis",
             save_firmware_to=scratch,
+            settings=SETTINGS,
         ) as vm:
             # Let GRUB's own timeout boot the first entry: what matters is
             # that the firmware wrote its store and exited cleanly.
@@ -274,17 +296,16 @@ def _boot(name: str, log_dir: Path) -> Boot:
     try:
         with QemuVm(
             log_dir,
-            machine.options(trenchboot.unpacked_image(), psp=PSP is not None),
+            machine.options(_image(), psp=PSP is not None, extra=EXTRA_ARGS),
             firmware=_warmed_firmware() if dasharo else None,
             tpm="tis",
+            settings=SETTINGS,
         ) as vm:
             console = Console(vm, BOOT_TIMEOUT)
             if entry.parameter is None:
                 boot.titles = console.select_entry(entry.title, boot_prompt=dasharo)
             else:
-                commands = grubcfg.commands(
-                    trenchboot.unpacked_image(), entry.title, entry.parameter
-                )
+                commands = grubcfg.commands(_image(), entry.title, entry.parameter)
                 (log_dir / "grub-commands.txt").write_text("\n".join(commands) + "\n")
                 boot.titles = console.type_entry(commands, boot_prompt=dasharo)
             console.wait_for_login(entry.banner)
@@ -338,7 +359,8 @@ def _workers() -> int:
 
 def _prepare(names: list[str]) -> None:
     """One unpack and one warming boot, ahead of the pool."""
-    trenchboot.unpacked_image()
+    global _IMAGE
+    _IMAGE = trenchboot.unpacked_image()
     if any(ENTRIES[name].firmware == "dasharo" for name in names):
         _warmed_firmware()
 
@@ -367,7 +389,7 @@ def _details() -> dict:
     """What `results.json` records of the session: the image, the matrix
     configuration if the environment is one, the QEMU and swtpm in use,
     the commit under test and the entries the tests take."""
-    qemu = Path(qemu_vm.binary())
+    qemu = Path(SETTINGS.binary)
     return {
         "release": trenchboot.release(),
         "image": trenchboot.description(),

@@ -14,6 +14,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 from drtmtest.qmp_client import QmpClient
@@ -147,6 +148,39 @@ def pcr_banks() -> tuple[str, ...]:
     return tuple(bank.strip() for bank in value.split(",") if bank.strip())
 
 
+@dataclass(frozen=True)
+class Settings:
+    """What the environment says of a boot, read once by `from_environment`.
+
+    `QemuVm` takes one so the reads happen where the caller says, on the
+    main thread, and never on the boot's own thread: a session's boots
+    overlap with unit tests that patch the environment, and a boot that
+    read it at that moment took the test's values, a TPM with the wrong
+    banks among them.
+    """
+
+    binary: str
+    kvm: bool
+    banks: tuple[str, ...]
+    swtpm_log_level: str | None
+    # The swtpm programs by path, found on PATH now: a unit test's stand-in
+    # `swtpm_setup` on PATH is not what a boot starting then must run. A
+    # program not on PATH stays a bare name, so the error names it.
+    swtpm_setup: str = "swtpm_setup"
+    swtpm: str = "swtpm"
+
+    @classmethod
+    def from_environment(cls) -> "Settings":
+        return cls(
+            binary(),
+            use_kvm(),
+            pcr_banks(),
+            os.environ.get("DRTM_SWTPM_LOG_LEVEL"),
+            shutil.which("swtpm_setup") or "swtpm_setup",
+            shutil.which("swtpm") or "swtpm",
+        )
+
+
 _STATE_FILE = "tpm2-00.permall"
 
 
@@ -164,13 +198,16 @@ def _wait_for_socket(process: subprocess.Popen, sock: str, what: str) -> None:
     raise TimeoutError(f"swtpm never created its {what} at {sock}")
 
 
-def allocate_pcr_banks(state_dir: Path, banks: Iterable[str], log_f) -> None:
+def allocate_pcr_banks(
+    state_dir: Path, banks: Iterable[str], log_f, program: str = "swtpm_setup"
+) -> None:
     """Writes a TPM 2.0 state into `state_dir` with only `banks` active,
-    through `swtpm_setup`, replacing any state already there."""
+    through `program`, `swtpm_setup` by name or path, replacing any state
+    already there."""
     state_dir.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
-            "swtpm_setup",
+            program,
             "--tpm2",
             "--tpmstate",
             str(state_dir),
@@ -191,21 +228,27 @@ def start_swtpm(
     sock: str,
     log_f,
     banks: Iterable[str] | None = None,
+    log_level: str | None = None,
+    programs: tuple[str, str] = ("swtpm_setup", "swtpm"),
 ) -> subprocess.Popen:
     """Starts a TPM 2.0 emulator on a Unix socket and waits for the socket.
 
     `state_dir` gets a fresh state with `banks` active first, what
-    `pcr_banks()` says when that is None.
+    `pcr_banks()` says when that is None. `programs` are `swtpm_setup`
+    and `swtpm`, by name or by path.
 
     Errors go to stderr regardless of `--log`, so a log holding only
-    `swtpm_setup`'s lines means a clean run. `DRTM_SWTPM_LOG_LEVEL` adds
-    debug tracing: level 5 and above enables libtpms logging, 20 dumps every
-    command.
+    `swtpm_setup`'s lines means a clean run. `log_level` is swtpm's own
+    debug tracing: level 5 and above enables libtpms logging, 20 dumps
+    every command. `Settings` takes it from `DRTM_SWTPM_LOG_LEVEL`.
     """
     state_dir.mkdir(parents=True, exist_ok=True)
-    allocate_pcr_banks(state_dir, banks if banks is not None else pcr_banks(), log_f)
+    setup, swtpm = programs
+    allocate_pcr_banks(
+        state_dir, banks if banks is not None else pcr_banks(), log_f, program=setup
+    )
     args = [
-        "swtpm",
+        swtpm,
         "socket",
         "--tpm2",
         "--tpmstate",
@@ -213,9 +256,8 @@ def start_swtpm(
         "--ctrl",
         f"type=unixio,path={sock}",
     ]
-    level = os.environ.get("DRTM_SWTPM_LOG_LEVEL")
-    if level:
-        args += ["--log", f"fd=1,level={level}"]
+    if log_level:
+        args += ["--log", f"fd=1,level={log_level}"]
     process = subprocess.Popen(args, stdout=log_f, stderr=subprocess.STDOUT)
     _wait_for_socket(process, sock, "control socket")
     return process
@@ -269,7 +311,10 @@ class QemuVm:
     writes to its variable store land on the copy, or `None` for QEMU's own
     SeaBIOS. `save_firmware_to` keeps that copy after a clean exit, which
     is how a warmed image is made. `tpm` attaches an swtpm-backed TPM 2.0
-    as `tis` or `crb`, or nothing when `None`.
+    as `tis` or `crb`, or nothing when `None`. `settings` is the binary,
+    the accelerator and the TPM's banks, read from the environment here
+    and now when `None`: a suite whose boots run on their own threads
+    reads them once up front and passes them in.
     """
 
     def __init__(
@@ -279,9 +324,13 @@ class QemuVm:
         firmware: Path | None = None,
         tpm: str | None = None,
         save_firmware_to: Path | None = None,
+        settings: Settings | None = None,
     ):
         if tpm is not None:
             tpm_args("", tpm)
+        self.settings = (
+            settings if settings is not None else Settings.from_environment()
+        )
         self.log_dir = Path(log_dir)
         self.options = list(options)
         self.firmware = Path(firmware) if firmware is not None else None
@@ -312,9 +361,9 @@ class QemuVm:
         self._serial_log = serial_log
 
         args = [
-            binary(),
+            self.settings.binary,
             "-accel",
-            "kvm" if use_kvm() else "tcg",
+            "kvm" if self.settings.kvm else "tcg",
             "-display",
             "none",
             # A panic leaves the VM stopped rather than exiting, so the run
@@ -336,7 +385,12 @@ class QemuVm:
             self._files.append(swtpm_log)
             self._swtpm_sock = _short_socket_path("drtmtest-swtpm-")
             self._swtpm = start_swtpm(
-                Path(self._workdir) / "swtpm-state", self._swtpm_sock, swtpm_log
+                Path(self._workdir) / "swtpm-state",
+                self._swtpm_sock,
+                swtpm_log,
+                banks=self.settings.banks,
+                log_level=self.settings.swtpm_log_level,
+                programs=(self.settings.swtpm_setup, self.settings.swtpm),
             )
             args += tpm_args(self._swtpm_sock, self.tpm)
         self._qmp_sock = _short_socket_path("drtmtest-qmp-")

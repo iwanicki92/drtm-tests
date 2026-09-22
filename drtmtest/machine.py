@@ -8,6 +8,7 @@
 
 import os
 import shlex
+from collections.abc import Sequence
 from pathlib import Path
 
 from drtmtest import qemu_vm
@@ -72,13 +73,15 @@ def options(
     strict: bool = True,
     snapshot: bool = True,
     psp: bool = False,
+    extra: Sequence[str] | None = None,
 ) -> list[str]:
     """The machine and the image, without the flash, the TPM or the console.
 
     `strict` makes the platform device stop the VM on a broken launch rule,
     so a wrong launch is a panic the harness sees rather than a line in
     the log. `psp` adds the Secure Processor with its DRTM service.
-    `DRTM_QEMU_ARGS` comes last.
+    `extra` comes last, what `extra_args()` reads from `DRTM_QEMU_ARGS`
+    when `None`: a caller on a boot's thread passes what it read up front.
     """
     args = [
         "-machine",
@@ -106,4 +109,4 @@ def options(
         args += ["-device", PSP_DEVICE]
     for trace in LAUNCH_TRACES:
         args += ["-trace", trace]
-    return args + extra_args()
+    return args + (list(extra) if extra is not None else extra_args())
