@@ -21,6 +21,15 @@ on:
         required: false
         default: ""
 
+# A newer run cancels the one before it: a push over a pull request
+# makes its fifteen boot jobs moot, and on main only the newest push
+# should publish the results branch, so one run at a time also keeps
+# two from pushing it at once. The event is in the group so a run by
+# hand on main cannot cancel a push's.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -105,8 +114,6 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-    concurrency:
-      group: results-branch
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
