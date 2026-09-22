@@ -16,9 +16,9 @@ checks what each launch leaves behind: the emulator's launch record, the
 TPM's PCRs, the event log that has to replay to them, and what Xen or
 Linux say about it.
 
-Upstream QEMU raises `#UD` on `SKINIT`. The `drtm` branch of our QEMU
-tree adds the launch machine, `-machine q35,amd-drtm=on`, and this suite
-needs that build. Point `DRTM_QEMU_BINARY` at it.
+Upstream QEMU raises `#UD` on `SKINIT`. The [`drtm` branch][qemu-fork] of
+our QEMU fork adds the launch machine, `-machine q35,amd-drtm=on`, and
+this suite needs that build. Point `DRTM_QEMU_BINARY` at it.
 
 ## Requirements
 
@@ -51,9 +51,9 @@ The first run downloads the Dasharo firmware and the image release into
 `dl-cache/` and unpacks the image there, about 1.5 GB in all. Each run
 writes its logs to a numbered directory under `logs/`.
 
-The image is the fork's `amd-drtm-test-image` release by default, a
-build of its `amd-drtm` branch with both SKL builds and the fixes the
-upstream releases lack. Set `DRTM_TB_RELEASE` to
+The image is the `amd-drtm-test-image` release of [our meta-trenchboot
+fork][tb-fork] by default, a build of its `amd-drtm` branch with both SKL
+builds and the fixes the upstream releases lack. Set `DRTM_TB_RELEASE` to
 another tag pinned in `drtmtest/trenchboot.py` to boot that one instead,
 an upstream release such as `v0.5.2` for instance. Each release keeps
 its own download and unpacked disk in `dl-cache/`.
@@ -163,6 +163,8 @@ BSD-3-Clause, see [LICENSE](LICENSE). `drtmtest/qmp_client.py` is adapted
 from third-party Apache-2.0 code and stays under that license, see
 [NOTICE](NOTICE).
 
+[qemu-fork]: https://github.com/iwanicki92/qemu/tree/drtm
+[tb-fork]: https://github.com/iwanicki92/meta-trenchboot/tree/amd-drtm
 [results]: https://github.com/iwanicki92/drtm-tests/blob/results/README.md
 [badge-fork]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/amd-drtm-test-image.json
 [badge-v0.5.2]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/v0.5.2.json

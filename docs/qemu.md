@@ -15,7 +15,8 @@ hand.
 ## Building the `drtm` branch
 
 Upstream QEMU raises `#UD` on `SKINIT` and knows none of the DRTM
-devices, so every boot needs a build of the `drtm` branch. QEMU's own
+devices, so every boot needs a build of the `drtm` branch of
+[our QEMU fork](https://github.com/iwanicki92/qemu/tree/drtm). QEMU's own
 build wants a C toolchain, `ninja-build`, `pkg-config`, Python 3 with
 `tomli`, `libglib2.0-dev` and `libpixman-1-dev`. Two more things decide
 what a launch under it can do:

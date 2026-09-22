@@ -285,12 +285,13 @@ passes through.
 
 ### The QEMU bundle
 
-CI does not build QEMU. The `drtm` branch is released on its fork as a
-tarball, tag `drtm-<QEMU version>-<n>`, holding
-`qemu/bin/qemu-system-x86_64` and `qemu/share/qemu/`, so the binary
-finds its firmware blobs through its own relative data directory, which
-the SeaBIOS entries need. `drtmtest/bundle.py` pins the tag and the
-SHA-256 the way the images are pinned, and `task ci:qemu` fetches it
+CI does not build QEMU. The `drtm` branch is released as a tarball on
+[our QEMU fork](https://github.com/iwanicki92/qemu/releases), tag
+`drtm-<QEMU version>-<n>`, holding `qemu/bin/qemu-system-x86_64` and
+`qemu/share/qemu/`, so the binary finds its firmware blobs through its
+own relative data directory, which the SeaBIOS entries need.
+`drtmtest/bundle.py` pins the tag and the SHA-256 the way the images are
+pinned, and `task ci:qemu` fetches it
 into `dl-cache/`, unpacks it under the hash and prints the binary's
 path. A bundle is made from a build directory with
 `task qemu-bundle QEMU_BUILD=/path/to/qemu/build`, which takes the
