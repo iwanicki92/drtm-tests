@@ -68,8 +68,8 @@ both SKL builds and the fixes the upstream releases lack.
 ## The PSP path
 
 AMD's Secure Processor can take part in the launch through its DRTM
-service. Only an image with the `AMDSL` SKL uses it, and a launch with
-the classic SKL fails under it.
+service. Only an image with the `AMDSL` SKL (the SKL build with PSP
+support) uses it, and a launch with the classic SKL fails under it.
 
 `tb-boot --psp` starts the image with the service.
 

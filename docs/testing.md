@@ -15,11 +15,9 @@ uv run pytest -k xen_efi      # one entry's tests, and only its boot
 uv run pytest --collect-only  # what would run, booting nothing
 ```
 
-`swtpm` and `swtpm_setup` (Debian: `swtpm-tools`) and `mtype` (`mtools`)
-must be on `PATH`. The session refuses a QEMU that rejects
-`-machine q35,amd-drtm=on` before booting anything. `DRTM_QEMU_ACCEL=kvm`
-switches to KVM, which boots the normal entries faster and cannot run the
-launches.
+The session refuses a QEMU that rejects `-machine q35,amd-drtm=on`
+before booting anything. `DRTM_QEMU_ACCEL=kvm` switches to KVM, which
+boots the normal entries faster and cannot run the launches.
 
 Only the boots the collected tests need are started, and they start at
 collection, so a run of one test boots once and a full run has every boot
@@ -27,33 +25,36 @@ in flight before the first assertion.
 
 ## The entries
 
-The image's GRUB menu lists six entries, and the suite boots one more
-of its own. Each has a fixture of the same name in `tests/conftest.py`,
-and a test takes the fixture of the boot it asserts on. Only entries a
-test names are booted, so a full run boots six: the launches, the Xen
-EFI control and the Linux control. The Linux one is kept because a
-kernel booted directly is what an IOMMU that passes DMA through breaks,
-while Xen's dom0 never notices. The normal MB2 entry only serves the
-menu check.
+The image's GRUB menu lists six entries and the suite adds a seventh,
+`linux_alt_launch`. Each has a fixture of the same name in
+`tests/conftest.py`, and a test takes the fixture of the boot it asserts
+on. Only entries a test names are booted, so a full run boots six of
+them, all but `xen_mb2`, which only serves the menu check. The Linux
+control catches a QEMU configuration whose IOMMU passes DMA through
+instead of translating it, `dma-remap=on` missing for instance: a Linux
+booted directly then cannot find its disk, while Xen's dom0 boots
+either way.
 
-The boot of the suite's own, `linux_alt_launch`, is the legacy Linux
-launch with `drtmtest=alt` added to the kernel command line. It is not
-in any menu: the harness reads `grub.cfg` off the image's boot partition
-with `mtype`, takes the entry's commands, appends the parameter to the
-`linux` line, and types them at GRUB's shell, entered from the menu with
-`c`, then `boot`. The functions the config defines are GRUB's by then,
-so the commands run as the entry would. The commands typed are kept as
-`grub-commands.txt` in the boot's log directory. The two launches share
-the SKL and the kernel, so PCR 17 has to come out the same and PCR 18
-has to differ, with the log's command line event the one that moved.
-The fork's image lists this launch as an entry of its own as well, which
-the menu check allows and nothing boots.
+`linux_alt_launch` is the legacy Linux launch with `drtmtest=alt` added
+to the kernel command line. It boots under SeaBIOS because the legacy
+Linux launch is the one that works on every release, the EFI one
+panicking on the upstream releases. It is not in any menu: the harness
+reads `grub.cfg` off the image's boot partition with `mtype`, takes the
+entry's commands, appends the parameter to the `linux` line, and types
+them at GRUB's shell, entered from the menu with `c`, then `boot`. The
+functions the config defines are GRUB's by then, so the commands run as
+the entry would. The commands typed are kept as `grub-commands.txt` in
+the boot's log directory. The two launches share the SKL and the kernel,
+so PCR 17 has to come out the same and PCR 18 has to differ, with the
+log's command line event the one that moved. The fork's image lists this
+launch as an entry of its own as well, which the menu check allows and
+nothing boots.
 
 The MB2 entries are legacy boots and run under QEMU's SeaBIOS, the way a
 BIOS board would run them. Under Dasharo's UEFI the MB2 launch runs SKL
 and then stops. The EFI entries and the Linux ones run under Dasharo.
 
-| Fixture               | GRUB entry                       | Firmware | On v0.5.2 here           |
+| Fixture               | GRUB entry                       | Firmware | Upstream releases        |
 |-----------------------|----------------------------------|----------|--------------------------|
 | `xen_efi_launch`      | Boot Xen with TrenchBoot (EFI)   | Dasharo  | launches                 |
 | `xen_efi`             | Boot Xen normally (EFI)          | Dasharo  | boots, control           |
@@ -64,26 +65,36 @@ and then stops. The EFI entries and the Linux ones run under Dasharo.
 | `xen_mb2`             | Boot Xen normally (MB2)          | SeaBIOS  | not booted               |
 | `linux_alt_launch`    | Boot Linux with TrenchBoot, alt  | SeaBIOS  | launches                 |
 
+The fork's release launches or boots every entry.
+
 Entries are selected by title from the menu GRUB draws, not by a fixed
 index, so a new entry in the image moves nothing here. The highlight is
 moved one key at a time, each waited for in GRUB's redraw and pressed
 again if it drew nothing, since a starved guest can read the key's
-escape sequence as three plain keys. The tests of an
-entry the session is known not to boot are strict expected failures: they
-must fail, and a pass is reported as a failure so the change is noticed
-and the expectation removed. `Entry.broken_reason` in `tests/conftest.py`
-decides, from the release, the image and `DRTM_PSP`.
+escape sequence as three plain keys.
+
+### Expected failures
+
+The tests of an entry the session is known not to boot are strict
+expected failures: they must fail, and a pass is reported as a failure
+so the change is noticed and the expectation removed.
+`Entry.broken_reason` in `tests/conftest.py` decides, from the release,
+the image and `DRTM_PSP`. An image whose wic carries the EFI boot alone,
+with a stub in its master boot record, has its SeaBIOS entries expected
+broken.
 
 ### Under the PSP
 
 `DRTM_PSP=on` boots everything with the Secure Processor's DRTM service,
-for an image built with the `AMDSL` SKL. `DRTM_PSP=classic` is the same
-service under an upstream release or any classic SKL, which never talk
-to it and extend into locked localities: Xen boots on with its extends
-failing, so only its tests on the record and the PCRs are expected to
-fail, while Linux panics in `slaunch_pcr_extend` and nothing of its
-launch is expected to pass. [The PSP device](qemu.md#the-psp-device)
-says what the service does. What each session expects:
+for an image built with the `AMDSL` SKL (the SKL build with PSP
+support). `DRTM_PSP=classic` is the same service under an upstream
+release or any classic SKL, which never talks to it and extends into
+locked localities. Xen still boots but its extends fail: the tests that
+check the launch (the platform's record, Xen's report and the PCR
+replay) are expected to fail, the IOMMU and bank tests pass. Linux
+panics in `slaunch_pcr_extend` and none of its launch tests are expected
+to pass. [The PSP device](qemu.md#the-psp-device) says what the service
+does. What each session expects:
 
 | Fixture               | `DRTM_PSP=on`, `AMDSL` image      | `DRTM_PSP=classic`, classic image |
 |-----------------------|-----------------------------------|-----------------------------------|
@@ -95,65 +106,10 @@ says what the service does. What each session expects:
 | `linux_alt_launch`    | PSP-assisted launch, TMR released | panics on its extend              |
 | `linux`               | boots, control                    | boots, control                    |
 
-Under `DRTM_PSP=on` the service extends PCR 17 and 18 too, at its
-`LAUNCH` and at the SKL's request, and logs those in a log of its own
-that `GET_TCG_LOGS` hands out. The `AMDSL` SKL fetches it after the OSSL
-extend and appends its records to its own log, all but the `SKINIT` one
-it logged already, so the log carries every extend and replays to the
-PCRs like the classic SKL's. The service logs the SHA-256 bank alone and
-the SKL's log has two, so each appended record gets the TCG placeholder
-digest, a one then zeros, in its SHA-1 bank, and the SKL extends the
-SHA-1 bank of that PCR with it. Linux resets on a record that does not
-carry every bank the header declares, and again on a header that does
-not declare every bank the TPM has, which rules out one-bank records and
-a one-bank header. An image whose SKL does not merge the two logs fails
-the five replay tests under the service.
-
-The SKL asks the TPM which banks have PCRs and declares exactly those,
-in the TPM's order. Its own measurements carry SHA-1 and SHA-256 where
-the TPM has them and the placeholder elsewhere, extended into that bank
-as well, so a TPM with SHA-256 alone or with SHA-384 on top boots Linux
-and replays too. `DRTM_PCR_BANKS` sets the banks of the fresh TPM state
-to try that. One limit remains: `SKINIT`'s record gets the placeholder
-in a bank the SKL cannot hash for, though the launch measured the SLB
-into that bank, so its replay is not expected to match. Xen's legacy
-path had one of its own. Its early code lets the TPM hash the multiboot
-information and copies back the digests, which the TPM returns for
-every hash it implements, SHA-1 first, and the copy stopped at the
-first one the log did not declare. With no SHA-1 bank the PCR 18 event
-kept the placeholder in SHA-256 and the replay missed on `sha256`
-alone. The image's Xen carries a patch that skips such digests, and the
-replay matches with SHA-256 alone since.
-
-Two tests per launch cover this. The log's header must declare the
-banks the TPM has PCRs in, as `tpm2_getcap pcrs` lists them, no more
-and no fewer. And the replay runs in every bank the TPM has, with
-`SKINIT`'s record taken as the SLB's digest in that bank, computed by
-the harness from the SLB bytes the boot dumps, since the log carries
-the placeholder where the SKL cannot hash while the launch measured the
-SLB there too. The log's own `SKINIT` digest is checked against the
-SLB's in SHA-1 and SHA-256, the banks the SKL hashes for. On the
-upstream releases under any banks but the default two, the Linux
-launches are expected not to boot and the bank test is expected to
-fail, and with a bank beyond those two the MB2 replay is expected to
-miss in it, since their Xen copies the multiboot information's digests
-for SHA-1 and SHA-256 alone. `tests/conftest.py` holds the three.
-
-The first `AMDSL` build taught the harness two things. Its wic carried
-the EFI boot alone, with a stub in the master boot record that boots
-nothing, so the SeaBIOS entries could not start on it. The harness reads
-the record and expects them broken on any such image. And its kernel
-walked the PCI devices for the PSP in `setup_arch()`, before any is
-enumerated, so it never learned of the service, never released the TMR
-GRUB set up over all of memory, and stopped at the missing root with its
-disk's DMA blocked. Both are fixed in the build that followed: the kernel
-finds the PSP through configuration space and releases the TMR from its
-IOMMU setup, and the launch tests assert on the release.
-
-The `AMDSL` SKL needs the service. Without it the SKL still sends its
-`LAUNCH` and extend to a mailbox that is not there, both fail, it never
-releases SL_DEV, and the launch tests fail on that. The plain matrix is
-for a classic image, the one `env.sh` selects.
+Under `DRTM_PSP=on` the launch tests also assert that Xen or Linux
+released the TMR. The `AMDSL` SKL needs the service: without it the
+SKL's `LAUNCH` and extend go to a mailbox that is not there, SL_DEV is
+never released and the launch tests fail.
 
 ### A launch that keeps the TMR
 
@@ -200,10 +156,13 @@ Once the shell answers, before the VM is torn down:
 - On a launch, the DRTM event log the SKL wrote, as hex over the
     console: Linux exposes it at `/sys/kernel/security/slaunch/eventlog`,
     and under Xen dom0 reads the range Xen's "reserving event log" line
-    names out of `/dev/mem`. With it, the length field of the SLB header
-    of the SKL the boot ran, `/boot/skl.bin` or under the service
-    `/boot/skl-amdsl.bin`, and that many bytes of it, what `SKINIT`
-    measures, dumped the same way.
+    names out of `/dev/mem`.
+- On a launch, the bytes `SKINIT` measured: the start of the SKL the
+    boot ran (`/boot/skl.bin`, or `/boot/skl-amdsl.bin` under the
+    service), up to the length its header gives, dumped as hex the same
+    way. The harness hashes them itself to check the log's `SKINIT`
+    record, and to replay PCR 17 in banks where the SKL could only log a
+    placeholder.
 - The whole console capture. The Xen tests read the hypervisor's lines
     off it, the ones tagged `(XEN)`, rather than off `xl dmesg`: the
     console ring is small and a verbose boot pushes the early lines out
@@ -219,9 +178,22 @@ brackets its own measurements with two such tags on PCR 17, and a replay
 that extends them lands off the TPM's value. The image's own
 `anti-evil-maid-dump-evt-log`, in v0.5.3-rc1 onwards, replays them and
 so agrees with the TPM under Xen only. An event carrying one bank's
-digest counts for that bank alone. The placeholder SHA-1 the `AMDSL` SKL
-logs for the service's records replays like any other digest, since the
-SKL extended the PCR with it.
+digest counts for that bank alone.
+
+Under `DRTM_PSP=on` the service extends PCR 17 and 18 too, at its
+`LAUNCH` and at the SKL's request, and logs those in a log of its own
+that `GET_TCG_LOGS` hands out. The `AMDSL` SKL fetches it after the OSSL
+extend and appends its records to its own log, all but the `SKINIT` one
+it logged already, so the log carries every extend and replays to the
+PCRs like the classic SKL's. The service logs the SHA-256 bank alone and
+the SKL's log has two, so each appended record gets the TCG placeholder
+digest, a one then zeros, in its SHA-1 bank, and the SKL extends the
+SHA-1 bank of that PCR with it, so it replays like any other digest.
+Linux resets on a record that does not carry every bank the header
+declares, and again on a header that does not declare every bank the TPM
+has, which rules out one-bank records and a one-bank header. An image
+whose SKL does not merge the two logs fails the five replay tests under
+the service.
 
 The launch tests check that the log opens with `SKINIT`'s event on
 PCR 17, whose digest is the SLB's, that the platform's record has the
@@ -229,6 +201,33 @@ same SLB length as the header, and that the replay of PCR 17 and 18
 reaches what `tpm2_pcrread` returned. The parser has its own tests in
 `tests/test_eventlog.py`, against the logs two v0.5.3-rc1 launches left
 in `tests/fixtures/`.
+
+## PCR banks
+
+The SKL asks the TPM which banks have PCRs and declares exactly those,
+in the TPM's order. Its own measurements carry SHA-1 and SHA-256 where
+the TPM has them and the placeholder elsewhere, extended into that bank
+as well, so a TPM with SHA-256 alone or with SHA-384 on top boots Linux
+and replays too. `DRTM_PCR_BANKS` sets the banks of the fresh TPM state
+to try that. `SKINIT`'s record gets the placeholder in a bank the SKL
+cannot hash for, though the launch measured the SLB into that bank, so
+the log alone does not replay there. The image's Xen skips the digests
+of banks the log does not declare when it copies the multiboot
+information's, so its legacy launch replays with SHA-256 alone too.
+
+Two tests per launch cover this. The log's header must declare the
+banks the TPM has PCRs in, as `tpm2_getcap pcrs` lists them, no more
+and no fewer. And the replay runs in every bank the TPM has, with
+`SKINIT`'s record taken as the SLB's digest in that bank, computed by
+the harness from the SLB bytes the boot dumps, since the log carries
+the placeholder where the SKL cannot hash while the launch measured the
+SLB there too. The log's own `SKINIT` digest is checked against the
+SLB's in SHA-1 and SHA-256, the banks the SKL hashes for. On the
+upstream releases under any banks but the default two, the Linux
+launches are expected not to boot and the bank test is expected to
+fail, and with a bank beyond those two the MB2 replay is expected to
+miss in it, since their Xen copies the multiboot information's digests
+for SHA-1 and SHA-256 alone. `tests/conftest.py` holds the three.
 
 ## Logs
 
@@ -264,9 +263,9 @@ configuration is the environment a session boots with, from
 | `sha384`     | `DRTM_PCR_BANKS=sha1,sha256,sha384`     | TPM with SHA-384 on top                    |
 
 On the upstream releases the PSP configurations set `DRTM_PSP=classic`
-instead: their classic SKL never talks to the service, every launch is
-expected to fail at the TPM, and the tables show it as such. A run by
-hand takes an optional comma-separated list of release tags to boot a
+instead, since their SKL never talks to the service. [Under the
+PSP](#under-the-psp) says what each entry then does. A run by hand
+takes an optional comma-separated list of release tags to boot a
 subset.
 
 The workflow calls `task` targets and nothing else, so a cell runs on a
@@ -287,19 +286,20 @@ passes through.
 
 CI does not build QEMU. The `drtm` branch is released as a tarball on
 [our QEMU fork](https://github.com/iwanicki92/qemu/releases), tag
-`drtm-<QEMU version>-<n>`, holding `qemu/bin/qemu-system-x86_64` and
-`qemu/share/qemu/`, so the binary finds its firmware blobs through its
-own relative data directory, which the SeaBIOS entries need.
+`drtm-<QEMU version>-<n>`. It holds `qemu/bin/qemu-system-x86_64` and
+`qemu/share/qemu/`, so the binary finds its firmware blobs, which the
+SeaBIOS entries need, through its own relative data directory. It was
+built on Ubuntu 24.04, whose glibc, glib and pixman it links, and the
+jobs run on that runner image, with the same swtpm 0.7.3.
+
 `drtmtest/bundle.py` pins the tag and the SHA-256 the way the images are
-pinned, and `task ci:qemu` fetches it
-into `dl-cache/`, unpacks it under the hash and prints the binary's
-path. A bundle is made from a build directory with
-`task qemu-bundle QEMU_BUILD=/path/to/qemu/build`, which takes the
-binary, stripped, and the data directory of the install tree meson lays
-out in the build, prints the tarball and its hash, and the release is
-created by hand with the tarball attached. It was built on Ubuntu 24.04
-and the jobs run on that runner image, whose glibc, glib and pixman it
-links, and its swtpm is the same 0.7.3.
+pinned. `task ci:qemu` fetches the bundle into `dl-cache/`, unpacks it
+under the hash and prints the binary's path.
+
+`task qemu-bundle QEMU_BUILD=/path/to/qemu/build` makes a bundle from a
+build directory: it takes the stripped binary and the data directory of
+the install tree meson lays out in the build, and prints the tarball and
+its hash. The release is created by hand with the tarball attached.
 
 ### Results
 
