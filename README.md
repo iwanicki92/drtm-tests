@@ -1,6 +1,6 @@
 # Boot matrix results
 
-Commit `c9b801bfe42a`, run [8](https://github.com/iwanicki92/drtm-tests/actions/runs/35789807557), finished 2026-09-22 22:05:05.
+Commit `8bcff5f71e86`, run [9](https://github.com/iwanicki92/drtm-tests/actions/runs/36063232886), finished 2026-09-24 21:49:39.
 QEMU bundle `drtm-11.1.1-1` (11.1.1 (v11.1.1-43-gff57ce2273-dirty)), swtpm 0.7.3.
 
 Rows are the GRUB entries the suite boots, named as their fixtures
