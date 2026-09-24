@@ -82,8 +82,8 @@ service under an upstream release or any classic SKL, which never talk
 to it and extend into locked localities: Xen boots on with its extends
 failing, so only its tests on the record and the PCRs are expected to
 fail, while Linux panics in `slaunch_pcr_extend` and nothing of its
-launch is expected to pass. The README says what the service does. What
-each session expects:
+launch is expected to pass. [The PSP device](qemu.md#the-psp-device)
+says what the service does. What each session expects:
 
 | Fixture               | `DRTM_PSP=on`, `AMDSL` image      | `DRTM_PSP=classic`, classic image |
 |-----------------------|-----------------------------------|-----------------------------------|

@@ -23,22 +23,15 @@ this suite needs that build. Point `DRTM_QEMU_BINARY` at it.
 ## Requirements
 
 - The `drtm` branch of QEMU, built for `x86_64-softmmu` with
-    `--enable-tpm`. Its build wants a C toolchain, `ninja-build`,
-    `pkg-config`, Python 3 with `tomli`, `libglib2.0-dev` and
-    `libpixman-1-dev`, plus `libgcrypt20-dev` for the RSA behind the PSP
-    path's signature check. Without it, or nettle in its place, the
-    build still runs, and the check is skipped and reported as
-    `unsupported`. [Building the `drtm`
-    branch](docs/qemu.md#building-the-drtm-branch) has the configure
-    line.
-- `swtpm` and `swtpm-tools` on `PATH`. The `emulator` backend is the only
-    one carrying the locality 4 hash sequence, and every boot seeds a
-    fresh TPM state with `swtpm_setup`.
+    `--enable-tpm`. `task ci:qemu` fetches the release CI boots with and
+    prints its binary. It was built on Ubuntu 24.04 and links that
+    release's glibc, glib and pixman, so on another host you will likely
+    have to [build the `drtm` branch](docs/qemu.md#building-the-drtm-branch)
+    yourself.
+- `swtpm` and `swtpm-tools` on `PATH`.
 - `mtools` on `PATH`, to read `grub.cfg` off the image without mounting
     it.
 - `uv`, which installs the Python side on the first run.
-- About 1.5 GB under `dl-cache/` for the firmware and the unpacked image,
-    and under a megabyte of logs per run.
 
 ## Running
 
@@ -58,121 +51,59 @@ The first run downloads the Dasharo firmware and the image release into
 `dl-cache/` and unpacks the image there, about 1.5 GB in all. Each run
 writes its logs to a numbered directory under `logs/`.
 
-The image is the `amd-drtm-test-image` release of [our meta-trenchboot
-fork][tb-fork] by default, a build of its `amd-drtm` branch with both SKL
-builds and the fixes the upstream releases lack. Set `DRTM_TB_RELEASE` to
-another tag pinned in `drtmtest/trenchboot.py` to boot that one instead,
-an upstream release such as `v0.5.2` for instance. Each release keeps
-its own download and unpacked disk in `dl-cache/`.
+| Variable           | Default               | Meaning                                                                                                            |
+|--------------------|-----------------------|--------------------------------------------------------------------------------------------------------------------|
+| `DRTM_QEMU_BINARY` | none, required        | The `drtm` branch's `qemu-system-x86_64`.                                                                          |
+| `DRTM_TB_RELEASE`  | `amd-drtm-test-image` | Image release to boot, a tag pinned in `drtmtest/trenchboot.py`.                                                   |
+| `DRTM_TB_IMAGE`    | unset                 | A local `.wic` to boot instead, read in place. No entry is expected broken on it. Excludes `DRTM_TB_RELEASE`.      |
+| `DRTM_PSP`         | `off`                 | Adds the PSP DRTM service, see below.                                                                              |
+| `DRTM_PCR_BANKS`   | `sha1,sha256`         | PCR banks active in every boot's TPM.                                                                              |
+| `DRTM_QEMU_ARGS`   | unset                 | Words appended to every QEMU command line, so what they repeat wins. `tb-boot` takes the same after `--`.          |
+| `DRTM_QEMU_ACCEL`  | `tcg`                 | `kvm` boots the normal entries faster and cannot run the launches.                                                 |
 
-`DRTM_TB_IMAGE` boots a build of your own instead: the raw `.wic` bitbake
-deploys, read in place. No entry is expected broken on it, since a local
-build is usually there to test a fix: an entry marked xfail on the upstream
-releases has to pass on it. It is refused if set together with
-`DRTM_TB_RELEASE`.
-
-`DRTM_QEMU_ARGS` appends its words to every QEMU command line of the
-session, split like a shell would. QEMU takes the last of a repeated
-argument, so `-m 6G` raises the memory and `-machine pit=off` merges into
-the machine options. `docs/testing.md` has the recipe this is for.
-`tb-boot` takes the same after `--`.
-
-`DRTM_PCR_BANKS` names the PCR banks active in every boot's TPM,
-`sha1,sha256` by default, the two a discrete TPM ships with. The SKL
-declares the TPM's banks in its event log and the kernel refuses a log
-that does not match them, so `sha256` alone or `sha1,sha256,sha384`
-exercise that.
+The default image is the `amd-drtm-test-image` release of [our
+meta-trenchboot fork][tb-fork], a build of its `amd-drtm` branch with
+both SKL builds and the fixes the upstream releases lack.
 
 ## The PSP path
 
-`DRTM_PSP` says whether the boots get AMD's Secure Processor and, with
-it, which launch the tests expect. Unset or `off`, the default, boots
-without one: every launch is the plain `SKINIT` path, and any image
-does. The other two values both add the same device,
-`-device amd-psp,drtm-service=on`, to every boot, and differ only in
-what the tests then expect. Pick the value from the SKL the image
-carries:
+AMD's Secure Processor can take part in the launch through its DRTM
+service. Only an image with the `AMDSL` SKL uses it, and a launch with
+the classic SKL fails under it.
 
-- `DRTM_PSP=on` for an image built with the `AMDSL` SKL: the default
-    `amd-drtm-test-image` release, or a `DRTM_TB_IMAGE` build of the
-    fork's `amd-drtm` branch. Every launch is expected to go through
-    the service and pass.
-- `DRTM_PSP=classic` for an image with the classic SKL: the upstream
-    releases, or a build of upstream meta-trenchboot. Every launch is
-    expected to fail at the TPM, and the tests check that it does.
+`tb-boot --psp` starts the image with the service.
 
-The CI matrix picks it the same way, `on` on the fork's release and
-`classic` on the upstream ones. The wrong value fails the session:
-launches expected to pass fail, or ones marked expected failures pass,
-which the strict markers report as failures. `tb-boot --psp` adds the
-device to a boot by hand.
+For the tests, `DRTM_PSP` adds the service to every boot and says which
+SKL is in the image, so the tests know what to expect:
 
-Under `DRTM_PSP=on` GRUB, SKL and Xen find the service through the SMN
-pair on the host bridge and take the PSP-assisted launch: GRUB sets a
-TMR up, the `AMDSL` SKL has the service check and launch it, and Xen or
-Linux releases the TMR once its IOMMU is programmed. The launch tests
-then assert on the service's record too, and on Xen's PSP lines.
+| Value           | Image                                         | Launch entries' tests       |
+|-----------------|-----------------------------------------------|-----------------------------|
+| `off` (default) | any                                           | pass, plain `SKINIT` launch |
+| `on`            | `AMDSL` SKL: the fork's release or `amd-drtm` | pass, PSP-assisted launch   |
+| `classic`       | classic SKL: upstream releases                | expected to fail            |
 
-Under `DRTM_PSP=classic` GRUB carries the same PSP code and sets a TMR
-up where it finds the service, but the classic SKL never talks to it,
-so the service keeps TPM localities 1 to 4 locked until a `LAUNCH`
-nobody issues. The SKL's extends at locality 2 go into a locked
-locality unnoticed, and the OS's own extends fail with all-ones
-answers, so the DRTM PCRs end up as `SKINIT` left them. Xen boots on
-and its tests on the record and the PCRs fail, Linux panics on its
-extend and none of its launch tests pass. Both are strict expected
-failures in that session, and the control entries have to boot.
-
-The emulated service follows AMD's DRTM guide where the hardware logs
-agreed with it and the hardware where they did not:
-
-- The service answers nothing until the guest kicks it with a zero
-    write to `C2PMSG_72`. A command before the kick leaves the ready bit
-    clear for good, which is the timeout GRUB's source describes.
-- One command at a time: a write while one is in flight is dropped.
-- `TMR_SETUP` takes an index below `tmr-count`, a base aligned to
-    `tmr-alignment` and a size in 64 KiB units. Each TMR is a DMA block
-    named `tmr0` to `tmr7` in `dma-blocks`, and the IOMMU drops device
-    DMA and interrupt messages into it, which is what breaks Xen's
-    IO-APIC timer check when a TMR from address zero is still up.
-    `TMR_RELEASE` drops them all and is accepted at any time. After a
-    launch `TMR_SETUP` is refused.
-- `LAUNCH` needs an `SKINIT` on record, the SLB inside one TMR, a
-    measured length matching the `$AS1` signature header, the RSA-PSS
-    signature verifying against the key token, and PCR 17 as `SKINIT`
-    left it. Each failure is the one `DRTM_LAUNCH_ERROR` status plus a
-    guest-error line naming the check, caps PCR 18 to 20 with an
-    all-ones extend and unlocks locality 4. Success extends PCR 17 with
-    the SPLT version and the TSME and anti-rollback states, PCR 18 with
-    the key token and the SecPatchLevel, releases SL_DEV and unlocks
-    localities 1 and 2, seizing the one the guest holds.
-- `EXTEND_OSSL_DIGEST` hashes a range inside a TMR into PCR 17 and 18,
-    then the `AMDSL` marker after it. `TPM_LOCALITY_ACCESS` locks
-    locality 2 and unlocks 4. Both are refused before a successful
-    launch. `GET_TCG_LOGS` hands out the event log of those extends.
-- `GET_TMR_DESCRIPTORS`, `ALLOCATE_SHARED_MEMORY` and
-    `GET_IVRS_TABLE_INFO` answer `DRTM_NOT_SUPPORTED`, since no boot
-    here issues them.
-
-Every guest-error line above stops a strict VM, like the platform's own
-rules. `docs/qemu.md` lists the device's properties and its traces.
+`classic` checks that the classic SKL does fail under the service. A
+test that passes when it should fail fails the session, so a wrong
+value for the image shows. The control entries, `xen_efi` and `linux`,
+pass under every value. [Under the PSP](docs/testing.md#under-the-psp)
+has the details.
 
 ## CI
 
 Every push and pull request is linted. Pull requests to `main` and
-pushes to `main` boot the whole matrix on GitHub Actions: every pinned
-release under every machine configuration, fifteen jobs, each with the
-logs of its boots attached. A push to `main` also publishes the tables
-to the [`results` branch][results], one commit per run, which the badges
-above read. The QEMU it boots with is a release of the `drtm` branch,
-pinned in `drtmtest/bundle.py`. `docs/testing.md` says how to run one
-cell of the matrix on a host, with the same `task` targets the workflow
-calls.
+pushes to `main` boot every pinned release under every configuration
+of the matrix, and a push to `main` also publishes the tables to the
+[`results` branch][results] the badges read. [The matrix in
+CI](docs/testing.md#the-matrix-in-ci) says how to run one cell on a
+host.
 
-`docs/design.md` says why the suite is shaped as it is,
-`docs/testing.md` what a boot looks like and what the tests assert, and
-`docs/qemu.md` how to build the `drtm` branch, what every QEMU argument
-is for and how to read the launch traces.
+## Documentation
+
+- [Design](docs/design.md): why the suite is shaped as it is.
+- [Testing](docs/testing.md): what a boot looks like and what the tests
+    assert.
+- [QEMU](docs/qemu.md): how to build the `drtm` branch, what every QEMU
+    argument is for and how to read the launch traces.
 
 ## License
 
