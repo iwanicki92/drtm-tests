@@ -8,26 +8,20 @@ SPDX-License-Identifier: BSD-3-Clause
 
 ## Why a repository of its own
 
-Three things test the AMD dynamic launch under QEMU, and each has a home:
+Two things test the AMD dynamic launch under QEMU, and each has a home:
 
 - The QEMU tree's functional test boots one GRUB entry and proves the
     emulator does what its branch claims. It lives with the code it tests
     and stays in the shape upstream expects.
-- The `drtm` repository boots its own UEFI binary, a precondition checker,
-    in a few seconds per configuration. Its harness is tuned for that
-    binary and its scope is that binary.
 - This repository boots the whole image, every entry, under every
-    release and configuration of its matrix, and takes the axes the other
-    two should not: a second firmware, hardware logs.
+    release and configuration of its matrix, and takes the axes the
+    functional test should not: a second firmware, hardware logs.
 
-The harness started as a copy of the `drtm` one and is now the package
-both take, `drtmtest`: the QEMU process with its console, QMP and swtpm,
-the pinned downloads, the Dasharo firmware and its warmed copy, and the
-pytest session that boots ahead of the tests. What differs is the machine
-each suite boots, a list of QEMU options either side builds itself, and
-what it does on the console once the machine is up. `drtm` still takes
-the package from a checkout beside it, the switch to this repository's
-remote pending.
+The harness is the package `drtmtest`: the QEMU process with its console,
+QMP and swtpm, the pinned downloads, the Dasharo firmware and its warmed
+copy, and the pytest session that boots ahead of the tests. The machine
+a suite boots, its QEMU options and what it does on the console once the
+machine is up are left to the suite.
 
 ## What a boot is
 

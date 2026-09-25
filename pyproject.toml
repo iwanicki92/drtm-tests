@@ -5,7 +5,7 @@
 [project]
 name = "drtm-tests"
 version = "0.1.0"
-description = "Boots TrenchBoot images under a QEMU that runs SKINIT, and the harness drtm shares"
+description = "Boots TrenchBoot images under a QEMU that runs SKINIT"
 requires-python = ">=3.12"
 license = "BSD-3-Clause"
 dependencies = [
