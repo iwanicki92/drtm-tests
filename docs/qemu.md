@@ -4,13 +4,13 @@ SPDX-FileCopyrightText: 2026 iwanicki92 <iwanicki92@gmail.com>
 SPDX-License-Identifier: BSD-3-Clause
 -->
 
-# Building the `drtm` QEMU, its command line and its traces
+# QEMU: building, command line and traces
 
-How to build the `drtm` branch of QEMU, what the harness runs on it
-for every boot, argument by argument, what the `amd-drtm=on` machine
-option stands for, and how to read the launch traces it writes to
-`qemu.log`. `uv run tb-boot -n` prints the exact command for a boot by
-hand.
+How to build the `drtm` branch of QEMU, what the harness runs on it for
+every boot, argument by argument, what the `amd-drtm=on` machine option
+stands for, how to read the launch traces it writes to `qemu.log`, and
+what the PSP device does. `uv run tb-boot -n` prints the exact command
+for a boot by hand.
 
 ## Building the `drtm` branch
 
@@ -82,7 +82,7 @@ qemu-system-x86_64 \
     -d guest_errors \
     -drive if=pflash,format=raw,file=firmware.rom \
     -D qemu.log \
-    -trace 'amd_drtm_*' -trace 'amd_nb_*' \
+    -trace 'amd_drtm_*' -trace 'amd_nb_*' -trace 'amd_psp_*' \
     -trace x86_skinit -trace x86_vm_cr_write \
     -trace x86_sipi_after_launch \
     -trace x86_init_held -trace x86_init_redirected \
@@ -93,8 +93,9 @@ qemu-system-x86_64 \
 
 ### The `amd-drtm=on` shorthand
 
-What the harness actually passes is shorter. `-machine q35,smm=on,amd-drtm=on`
-stands for the seven launch lines in the command above:
+What the harness actually passes is shorter.
+`-machine q35,smm=on,amd-drtm=on` stands for the seven launch lines in
+the command above:
 
 ```sh
     -cpu EPYC-Genoa,skinit=on
@@ -111,12 +112,12 @@ free choice. Since the platform device is then created by the machine
 rather than by a `-device` line, its `strict` property is set through
 `-global amd-drtm-platform.strict=on` instead. Each device also works on
 its own: `-device amd-drtm-platform` alone records launches and hashes
-the SLB but has no IOMMU to enforce SL_DEV with, and `amd-nb` alone gives
-SKL a MEMPROT_CR to write. The shorthand does not add the Secure
+the SLB but has no IOMMU to enforce SL_DEV with, and `amd-nb` alone
+gives SKL a MEMPROT_CR to write. The shorthand does not add the Secure
 Processor, `-device amd-psp`: it publishes the ASPT and, with
 `drtm-device=on`, the ACPI DRTM device, and neither is needed for a
 launch through `SKINIT`. `DRTM_PSP` adds it with `drtm-service=on`, the
-PSP-assisted launch path the README describes.
+PSP-assisted launch path [The PSP device](#the-psp-device) describes.
 
 ## The arguments
 
@@ -142,7 +143,7 @@ PSP-assisted launch path the README describes.
 | `-display none -vga none -nic none`                                        | No window, no VGA and no network card: everything goes over serial, and a NIC would add a DMA-capable device the tests do not use.                                                                                                                                                                                                                                                                                                                                                                                       |
 | `-qmp unix:...,server,nowait`                                              | The monitor socket `query-amd-drtm` is asked on, plus `query-status` once a second to notice a strict-mode stop.                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `-d guest_errors`                                                          | Logs guest-side mistakes QEMU catches, the launch rules among them, into the log file.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `-drive if=pflash,format=raw,file=...`                                     | The Dasharo ROM as flash. Left out for the MB2 entries, which then boot QEMU's SeaBIOS. The firmware writes its variable store into this file, so it is a copy.                                                                                                                                                                                                                                                                                                                                                          |
+| `-drive if=pflash,format=raw,file=...`                                     | The Dasharo ROM as flash. Left out for the legacy entries, MB2 and legacy Linux, which then boot QEMU's SeaBIOS. The firmware writes its variable store into this file, so it is a copy.                                                                                                                                                                                                                                                                                                                                 |
 | `-D qemu.log`                                                              | Where `-d` and `-trace` output goes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `-device amd-psp,drtm-service=on`                                          | With `DRTM_PSP` only. The Secure Processor at its next free slot with the DRTM service behind its `C2PMSG` mailbox, found through the SMN pair on the host bridge. Its knobs keep their defaults: `verify=on` checks the SKL's signature, `locality-locks=on` keeps TPM localities 1 to 4 locked until the service's `LAUNCH`, `tmr-count=1` and `tmr-alignment=0x10000` are what the capability reports, `command-delay=0` publishes each status at once, and `tcg-log-base=0xfedb0000` is where `GET_TCG_LOGS` points. |
 | `-trace ...`                                                               | The launch events, listed below. Pattern arguments need quoting in a shell.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -159,14 +160,12 @@ The swtpm side:
     `tb-boot` reseeds the one under `run/` on every start.
 - `--ctrl type=unixio,path=...` is the control socket. QEMU's `emulator`
     backend drives both the control and the data channel through it.
-- Every start begins with a state holding only the SHA-1 and SHA-256
-    banks, written by `swtpm_setup --tpm2 --pcr-banks sha1,sha256
-    --overwrite`. swtpm's default activates every bank libtpms has, and
-    the Linux launch then dies in the kernel's late PCR extend: the SKL
-    log carries one digest per bank a discrete TPM ships with, and the
-    kernel hands the TPM exactly those, which it refuses with more banks
-    active. Overwriting is what keeps a state from before this seeding, or
-    one swtpm wrote on its own, from coming back.
+- swtpm's own default activates every bank libtpms has, so every start
+    begins with a fresh state written by `swtpm_setup --tpm2 --pcr-banks
+    sha1,sha256 --overwrite`, holding only those two banks. `DRTM_PCR_BANKS`
+    changes the list, and [PCR banks](testing.md#pcr-banks) says why it
+    matters. `--overwrite` keeps a state from an earlier start, or one swtpm
+    wrote on its own, from coming back.
 
 ## Reading the traces
 
@@ -241,9 +240,10 @@ In the order they appear:
 - `x86_vm_cr_write cpu 1 0x7 -> 0x5`: the AP clears its own R_INIT, from
     all three bits set to DPD and DIS_A20M.
 
-The MB2 launch reads the same apart from the addresses. The Linux launch
-stops after the unblock, since the kernel panics before it clears R_INIT
-or starts the AP. Two events are absent from a healthy boot of this image:
+The MB2 launch reads the same apart from the addresses. The EFI Linux
+launch on the upstream releases stops after the unblock, since the
+kernel panics before it clears R_INIT or starts the AP. Two events are
+absent from a healthy launch:
 
 - `x86_init_held`: an INIT arrived while GIF was clear and is held until
     `STGI`.
@@ -334,3 +334,33 @@ with it and the hardware where they did not:
 
 Every guest-error line above stops a strict VM, like the platform's own
 rules.
+
+Its traces, `amd_psp_*`, add about thirty lines to a launch:
+
+- `amd_psp_drtm_reset`: the service was reset with the machine.
+- `amd_psp_drtm_kick`: the guest's zero write to `C2PMSG_72`. The
+    service answers commands from here on.
+- `amd_psp_drtm_command` and `amd_psp_drtm_status`: each command the
+    guest sent, and the status it got back, 0 for success.
+- `amd_psp_drtm_ready_held`: with `command-delay` set, how long the
+    ready bit stays clear before the status is published.
+- `amd_psp_drtm_tmr_setup` and `amd_psp_drtm_tmr_release`: a TMR
+    placed or dropped, with its index, base and length.
+- `amd_psp_drtm_signature`: the SKL's signature check at `LAUNCH`,
+    as `query-amd-drtm` numbers it: 1 verified, 2 failed, 3 skipped with
+    `verify=off`, 4 unsupported for a build without RSA.
+- `amd_psp_drtm_soc_flags`: whether the running CPU is in the SKL
+    header's list of CPU signatures. A miss only traces, since on
+    hardware adding the running family to the list changed nothing.
+- `amd_psp_drtm_pcr_read`: PCR 17 as `LAUNCH` found it, compared with
+    what `SKINIT` left.
+- `amd_psp_drtm_launch_ok` or `amd_psp_drtm_launch_failed`: the
+    outcome of `LAUNCH`, the failure naming the check.
+- `amd_psp_drtm_pcr_extend` and `amd_psp_drtm_log_event`: every extend
+    the service does, and the event it logs for it.
+- `amd_psp_drtm_locks`: the mask of TPM localities the service keeps
+    locked, after each change.
+- `amd_psp_drtm_extend_ossl_digest`,
+    `amd_psp_drtm_tpm_locality_access` and
+    `amd_psp_drtm_get_tcg_logs`: those commands, with the range hashed
+    or the log handed out.

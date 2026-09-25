@@ -128,11 +128,9 @@ def qmp_args(sock: str) -> list[str]:
     return ["-qmp", f"unix:{sock},server,nowait"]
 
 
-# The PCR banks a fresh TPM state gets. swtpm allocates every bank libtpms
-# has, and a Linux launch then fails its late PCR extend: the SKL event log
-# carries one digest per bank below, and the kernel hands the TPM exactly
-# those, which a TPM with more banks active refuses. A discrete TPM ships
-# with these two.
+# The PCR banks a fresh TPM state gets, where swtpm would allocate every
+# bank libtpms has. The upstream SKL logs these two alone, so a Linux
+# launch from it needs exactly them active.
 PCR_BANKS: tuple[str, ...] = ("sha1", "sha256")
 
 
