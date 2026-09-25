@@ -31,8 +31,8 @@ class Configuration:
     def env(self, release: str) -> dict[str, str]:
         """What the configuration sets for a release. The service goes
         with `DRTM_PSP=on` for an image whose SKL uses it and `classic`
-        for the upstream releases, whose SKL never talks to it and whose
-        launches are then expected to fail at the TPM."""
+        for the upstream releases, whose SKL never talks to it, so their
+        launch tests are expected failures."""
         env = {}
         if self.psp:
             upstream = trenchboot.RELEASES[release].upstream
@@ -43,13 +43,16 @@ class Configuration:
 
 
 CONFIGURATIONS: dict[str, Configuration] = {
-    "classic": Configuration("Classic launch, TPM with SHA-1 and SHA-256"),
-    "psp": Configuration("PSP DRTM service on", psp=True),
-    "sha256": Configuration("TPM with SHA-256 alone", banks="sha256"),
+    "classic": Configuration("Without PSP, TPM with SHA-1 and SHA-256"),
+    "psp": Configuration("With PSP DRTM service, TPM with SHA-1 and SHA-256", psp=True),
+    "sha256": Configuration("Without PSP, TPM with SHA-256 alone", banks="sha256"),
     "psp-sha256": Configuration(
-        "PSP DRTM service on, SHA-256 alone", psp=True, banks="sha256"
+        "With PSP DRTM service, TPM with SHA-256 alone", psp=True, banks="sha256"
     ),
-    "sha384": Configuration("TPM with SHA-384 on top", banks="sha1,sha256,sha384"),
+    "sha384": Configuration(
+        "Without PSP, TPM with SHA-1, SHA-256 and SHA-384",
+        banks="sha1,sha256,sha384",
+    ),
 }
 
 # What a configuration sets, cleared before its own environment goes in.

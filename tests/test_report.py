@@ -101,7 +101,7 @@ def results() -> list[dict]:
 
 def test_a_cell_says_what_the_boot_did(results: list[dict]):
     page, _ = render(results)
-    title = "Classic launch, TPM with SHA-1 and SHA-256"
+    title = "Without PSP, TPM with SHA-1 and SHA-256"
     assert _row(page, title, "xen_efi_launch") == [PASS, FAIL, NONE]
     assert _row(page, title, "linux_launch") == [PASS, FAIL, PASS]
 
@@ -116,7 +116,7 @@ def test_the_notes_say_what_was_expected(results: list[dict]):
 
 def test_a_release_without_results_is_a_missing_column(results: list[dict]):
     page, _ = render(results)
-    psp = page.split("## PSP DRTM service on")[1]
+    psp = page.split("## With PSP DRTM service, TPM with SHA-1 and SHA-256")[1]
     header = psp.strip().splitlines()[0]
     assert [c.strip() for c in header.strip("|").split("|")] == [
         "Entry",
@@ -124,7 +124,9 @@ def test_a_release_without_results_is_a_missing_column(results: list[dict]):
         "v0.5.2",
         "v0.5.3-rc1",
     ]
-    assert _row(page, "PSP DRTM service on", "xen_efi_launch") == [PASS, NONE, NONE]
+    assert _row(
+        page, "With PSP DRTM service, TPM with SHA-1 and SHA-256", "xen_efi_launch"
+    ) == [PASS, NONE, NONE]
     assert "- No results for `v0.5.2`." in psp
     assert "- No results for `v0.5.3-rc1`." in psp
 
@@ -133,7 +135,7 @@ def test_the_full_table_has_every_test_and_the_parser_ones_only_there(
     results: list[dict],
 ):
     page, _ = render(results)
-    title = "Classic launch, TPM with SHA-1 and SHA-256"
+    title = "Without PSP, TPM with SHA-1 and SHA-256"
     assert _row(page, title, XEN_REPLAY) == ["passed", "failed", NONE]
     assert _row(page, title, LINUX) == ["passed", "xfailed", "xpassed"]
     assert _row(page, title, PARSER) == ["passed", "passed", "passed"]
@@ -143,7 +145,9 @@ def test_the_full_table_has_every_test_and_the_parser_ones_only_there(
 
 def test_the_sections_and_columns_follow_the_matrix_order(results: list[dict]):
     page, badges = render(list(reversed(results)))
-    assert page.index("## Classic launch") < page.index("## PSP DRTM service on")
+    assert page.index("## Without PSP, TPM with SHA-1 and SHA-256") < page.index(
+        "## With PSP DRTM service, TPM with SHA-1 and SHA-256"
+    )
     assert list(badges) == ["amd-drtm-test-image", "v0.5.2", "v0.5.3-rc1"]
 
 

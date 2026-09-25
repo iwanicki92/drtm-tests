@@ -254,13 +254,13 @@ pinned release under every configuration, one job each. A
 configuration is the environment a session boots with, from
 `drtmtest/matrix.py`:
 
-| Name         | Environment                             | What it exercises                          |
-|--------------|-----------------------------------------|--------------------------------------------|
-| `classic`    | none                                    | Classic launch, TPM with SHA-1 and SHA-256 |
-| `psp`        | `DRTM_PSP=on`                           | PSP DRTM service on                        |
-| `sha256`     | `DRTM_PCR_BANKS=sha256`                 | TPM with SHA-256 alone                     |
-| `psp-sha256` | `DRTM_PSP=on`, `DRTM_PCR_BANKS=sha256`  | PSP DRTM service on, SHA-256 alone         |
-| `sha384`     | `DRTM_PCR_BANKS=sha1,sha256,sha384`     | TPM with SHA-384 on top                    |
+| Name         | Environment                             | What it exercises                                 |
+|--------------|-----------------------------------------|---------------------------------------------------|
+| `classic`    | none                                    | Without PSP, TPM with SHA-1 and SHA-256           |
+| `psp`        | `DRTM_PSP=on`                           | With PSP DRTM service, TPM with SHA-1 and SHA-256 |
+| `sha256`     | `DRTM_PCR_BANKS=sha256`                 | Without PSP, TPM with SHA-256 alone               |
+| `psp-sha256` | `DRTM_PSP=on`, `DRTM_PCR_BANKS=sha256`  | With PSP DRTM service, TPM with SHA-256 alone     |
+| `sha384`     | `DRTM_PCR_BANKS=sha1,sha256,sha384`     | Without PSP, TPM with SHA-1, SHA-256 and SHA-384  |
 
 On the upstream releases the PSP configurations set `DRTM_PSP=classic`
 instead, since their SKL never talks to the service. [Under the
