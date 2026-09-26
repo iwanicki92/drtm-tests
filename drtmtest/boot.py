@@ -4,8 +4,8 @@
 
 """`tb-boot`: the same boot as the tests, by hand, with the console on stdio.
 
-    tb-boot [-f dasharo|seabios] [-m MEM] [-s SMP] [-w] [-n] [--no-strict]
-            [--psp] [-- QEMU ARGS]
+    tb-boot [-f dasharo|seabios] [-m MEM] [-s SMP] [-w] [-n] [-g]
+            [--no-strict] [--psp] [-- QEMU ARGS]
     tb-boot query          query-amd-drtm on the running instance
 
 Ctrl-A x quits, Ctrl-A c switches to the monitor. The firmware copy, the
@@ -60,6 +60,12 @@ def main() -> int:
         "-n", "--dry-run", action="store_true", help="print the command"
     )
     parser.add_argument(
+        "-g",
+        "--graphics",
+        action="store_true",
+        help="a standard VGA card shown in an SDL window",
+    )
+    parser.add_argument(
         "--no-strict", action="store_true", help="log broken rules only"
     )
     parser.add_argument(
@@ -91,8 +97,7 @@ def main() -> int:
         binary(),
         "-accel",
         "kvm" if use_kvm() else "tcg",
-        "-display",
-        "none",
+        *([] if opts.graphics else ["-display", "none"]),
         "-action",
         "panic=pause",
         "-D",
@@ -108,6 +113,9 @@ def main() -> int:
         *tpm_args(str(swtpm_sock)),
         *qmp_args(str(qmp_sock)),
     ]
+    if opts.graphics:
+        # After the machine's -vga none, so it wins.
+        args += ["-display", "sdl", "-vga", "std"]
     if firmware is not None:
         args += pflash_args(firmware)
     args += ["-serial", "mon:stdio", *opts.rest]

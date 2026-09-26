@@ -44,6 +44,7 @@ To boot the image by hand, with the serial console on stdio:
 
 ```sh
 uv run tb-boot
+uv run tb-boot -g       # with a VGA card in an SDL window as well
 uv run tb-boot query    # the launch record of the running instance
 ```
 
