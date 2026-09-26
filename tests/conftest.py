@@ -74,14 +74,20 @@ OTHER_BANKS = trenchboot.upstream() and BANKS != qemu_vm.PCR_BANKS
 MORE_BANKS = trenchboot.upstream() and bool(set(BANKS) - set(qemu_vm.PCR_BANKS))
 
 
+# An AMD Secure Processor device ID that GRUB, the SKL and Xen all list
+# as having no PSP, upstream and in the fork alike.
+NO_PSP_DEVICE_ID = 0x1537
+
+
 @dataclass(frozen=True)
 class Entry:
     """One GRUB entry: its title, which OS it boots, whether through a
     launch, and under which firmware. `broken` names why it is not expected
-    to boot on the upstream releases. An entry with a `parameter` is not
-    picked from the menu but typed at GRUB's shell: the titled entry's
-    commands, read off the image, with the parameter on the kernel's
-    line, so every image has it."""
+    to boot on the upstream releases. An entry with a `parameter` or a
+    `prelude` is not picked from the menu but typed at GRUB's shell: the
+    prelude's commands, then the titled entry's, read off the image, with
+    the parameter on the kernel's line, so every image has it.
+    `devices` are QEMU arguments this entry's machine gets as well."""
 
     title: str
     os: str
@@ -89,6 +95,12 @@ class Entry:
     firmware: str = "dasharo"
     broken: str | None = None
     parameter: str | None = None
+    prelude: tuple[str, ...] = ()
+    devices: tuple[str, ...] = ()
+
+    @property
+    def typed(self) -> bool:
+        return self.parameter is not None or bool(self.prelude)
 
     @property
     def broken_reason(self) -> str | None:
@@ -154,6 +166,25 @@ ENTRIES: dict[str, Entry] = {
         True,
         firmware="seabios",
         parameter="drtmtest=alt",
+    ),
+    # The Xen EFI launch typed after `set debug=slaunch`. A device GRUB's
+    # PSP table lists without one makes GRUB print after Xen exits the boot
+    # services. Under the service it would hide the real PSP, so it is left out.
+    "xen_efi_debug_launch": Entry(
+        "Boot Xen with TrenchBoot (EFI)",
+        "xen",
+        True,
+        broken=(
+            "GRUB's debug print after exit_boot_services goes to the EFI console"
+            if PSP is None
+            else None
+        ),
+        prelude=("set debug=slaunch",),
+        devices=(
+            ("-device", f"amd-psp,device-id={NO_PSP_DEVICE_ID:#06x}")
+            if PSP is None
+            else ()
+        ),
     ),
     # Booted as the Linux control and the warming boot. A kernel booted
     # directly is what an IOMMU passing DMA through breaks, Xen's dom0 not.
@@ -298,18 +329,23 @@ def _boot(name: str, log_dir: Path) -> Boot:
     try:
         with QemuVm(
             log_dir,
-            machine.options(_image(), psp=PSP is not None, extra=EXTRA_ARGS),
+            machine.options(
+                _image(), psp=PSP is not None, extra=[*entry.devices, *EXTRA_ARGS]
+            ),
             firmware=_warmed_firmware() if dasharo else None,
             tpm="tis",
             settings=SETTINGS,
         ) as vm:
             console = Console(vm, BOOT_TIMEOUT)
-            if entry.parameter is None:
+            if not entry.typed:
                 boot.titles = console.select_entry(entry.title, boot_prompt=dasharo)
             else:
-                commands = grubcfg.commands(
-                    _image(), entry.title, entry.parameter, env=SETTINGS.environment
-                )
+                commands = [
+                    *entry.prelude,
+                    *grubcfg.commands(
+                        _image(), entry.title, entry.parameter, env=SETTINGS.environment
+                    ),
+                ]
                 (log_dir / "grub-commands.txt").write_text("\n".join(commands) + "\n")
                 boot.titles = console.type_entry(commands, boot_prompt=dasharo)
             console.wait_for_login(entry.banner)
@@ -444,6 +480,7 @@ def _entry_fixture(name: str):
 
 
 xen_efi_launch = _entry_fixture("xen_efi_launch")
+xen_efi_debug_launch = _entry_fixture("xen_efi_debug_launch")
 xen_efi = _entry_fixture("xen_efi")
 xen_mb2_launch = _entry_fixture("xen_mb2_launch")
 xen_mb2 = _entry_fixture("xen_mb2")

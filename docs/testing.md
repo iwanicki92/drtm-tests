@@ -25,11 +25,11 @@ in flight before the first assertion.
 
 ## The entries
 
-The image's GRUB menu lists six entries and the suite adds a seventh,
-`linux_alt_launch`. Each has a fixture of the same name in
-`tests/conftest.py`, and a test takes the fixture of the boot it asserts
-on. Only entries a test names are booted, so a full run boots six of
-them, all but `xen_mb2`, which only serves the menu check. The Linux
+The image's GRUB menu lists six entries and the suite adds two,
+`linux_alt_launch` and `xen_efi_debug_launch`. Each has a fixture of the
+same name in `tests/conftest.py`, and a test takes the fixture of the
+boot it asserts on. Only entries a test names are booted, so a full run
+boots seven of them, all but `xen_mb2`, which only serves the menu check. The Linux
 control catches a QEMU configuration whose IOMMU passes DMA through
 instead of translating it, `dma-remap=on` missing for instance: a Linux
 booted directly then cannot find its disk, while Xen's dom0 boots
@@ -44,26 +44,40 @@ entry's commands, appends the parameter to the `linux` line, and types
 them at GRUB's shell, entered from the menu with `c`, then `boot`. The
 functions the config defines are GRUB's by then, so the commands run as
 the entry would. The commands typed are kept as `grub-commands.txt` in
-the boot's log directory. The two launches share the SKL and the kernel,
-so PCR 17 has to come out the same and PCR 18 has to differ, with the
-log's command line event the one that moved. The fork's image lists this
-launch as an entry of its own as well, which the menu check allows and
-nothing boots.
+the boot's log directory. They go one key at a time, since under Dasharo
+a line sent at once reaches the shell with characters lost. The two
+launches share the SKL and the kernel, so PCR 17 has to come out the same
+and PCR 18 has to differ, with the log's command line event the one that
+moved. The fork's image lists this launch as an entry of its own as well,
+which the menu check allows and nothing boots.
+
+`xen_efi_debug_launch` is the Xen EFI launch typed the same way, after
+`set debug=slaunch`. Xen exits the boot services and then calls back into
+GRUB for the launch, so GRUB's debug prints there must go to the serial
+terminal alone: the EFI console is gone by then. The upstream releases
+still write to it and hang, or on hardware take an exception. Without the
+service, the machine gets a Secure Processor device with ID 0x1537, which
+the PSP tables of GRUB, the SKL and Xen all mark as having no PSP, and
+GRUB prints that it found one. The test takes that line after Xen's EFI
+loader banner. Under
+the service the SKL and Xen would meet that device first and never reach
+the real one, so it is left out, and only the fork's GRUB prints there.
 
 The MB2 entries are legacy boots and run under QEMU's SeaBIOS, the way a
 BIOS board would run them. Under Dasharo's UEFI the MB2 launch runs SKL
 and then stops. The EFI entries and the Linux ones run under Dasharo.
 
-| Fixture               | GRUB entry                       | Firmware | Upstream releases        |
-|-----------------------|----------------------------------|----------|--------------------------|
-| `xen_efi_launch`      | Boot Xen with TrenchBoot (EFI)   | Dasharo  | launches                 |
-| `xen_efi`             | Boot Xen normally (EFI)          | Dasharo  | boots, control           |
-| `xen_mb2_launch`      | Boot Xen with TrenchBoot (MB2)   | SeaBIOS  | launches                 |
-| `linux_launch`        | Boot Linux with TrenchBoot       | Dasharo  | kernel panic             |
-| `linux_legacy_launch` | Boot Linux with TrenchBoot       | SeaBIOS  | launches                 |
-| `linux`               | Boot Linux normally              | Dasharo  | boots, control           |
-| `xen_mb2`             | Boot Xen normally (MB2)          | SeaBIOS  | not booted               |
-| `linux_alt_launch`    | Boot Linux with TrenchBoot, alt  | SeaBIOS  | launches                 |
+| Fixture                | GRUB entry                            | Firmware | Upstream releases         |
+|------------------------|---------------------------------------|----------|---------------------------|
+| `xen_efi_launch`       | Boot Xen with TrenchBoot (EFI)        | Dasharo  | launches                  |
+| `xen_efi`              | Boot Xen normally (EFI)               | Dasharo  | boots, control            |
+| `xen_mb2_launch`       | Boot Xen with TrenchBoot (MB2)        | SeaBIOS  | launches                  |
+| `linux_launch`         | Boot Linux with TrenchBoot            | Dasharo  | kernel panic              |
+| `linux_legacy_launch`  | Boot Linux with TrenchBoot            | SeaBIOS  | launches                  |
+| `linux`                | Boot Linux normally                   | Dasharo  | boots, control            |
+| `xen_mb2`              | Boot Xen normally (MB2)               | SeaBIOS  | not booted                |
+| `linux_alt_launch`     | Boot Linux with TrenchBoot, alt       | SeaBIOS  | launches                  |
+| `xen_efi_debug_launch` | Boot Xen with TrenchBoot (EFI), debug | Dasharo  | hangs without the service |
 
 The fork's release launches or boots every entry.
 

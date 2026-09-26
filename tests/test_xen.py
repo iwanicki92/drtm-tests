@@ -8,7 +8,9 @@ its control boot without one, and the MB2 launch under SeaBIOS."""
 import hashlib
 import re
 
+import pytest
 from conftest import (
+    NO_PSP_DEVICE_ID,
     PCR_CAPPED,
     PCR_ONES,
     PCR_ZERO,
@@ -20,6 +22,7 @@ from conftest import (
     expects_xens_mbi_digest,
 )
 
+from drtmtest.console import strip_ansi
 from drtmtest.eventlog import EV_SLAUNCH, Event, banks, replay
 
 # The digests the SKL computes itself. In any other bank its SKINIT record
@@ -34,6 +37,15 @@ XEN_RESERVES_SLB = "SLAUNCH: reserving SLB"
 # the TMR it releases once its IOMMU is programmed.
 XEN_PSP_LAUNCH = "SLAUNCH: PSP-assisted launch"
 XEN_RELEASES_TMR = "SLAUNCH: released TMR 0"
+
+# Xen's EFI loader banner, the last line before it exits the boot services
+# and calls back into GRUB for the launch.
+XEN_EFI_LOADER = "EFI loader"
+
+# What GRUB's slaunch debug prints for the device of the debug launch.
+GRUB_NO_PSP = (
+    f"DRTM: AMD SP device (PCI info: 0x1022, {NO_PSP_DEVICE_ID:#06x}) does not have PSP"
+)
 
 # The service's DRTM_CMD_TMR_RELEASE, the last command a boot through the
 # service issues before the shell.
@@ -164,6 +176,26 @@ def test_efi_launch_log_replays_to_the_pcrs(xen_efi_launch: Boot):
 @expects_skls_banks()
 def test_efi_launch_log_declares_the_tpms_banks(xen_efi_launch: Boot):
     assert_log_declares_the_tpms_banks(xen_efi_launch)
+
+
+@expects_boot("xen_efi_debug_launch")
+@expects_open_localities()
+def test_efi_debug_launch_is_recorded_by_the_platform(xen_efi_debug_launch: Boot):
+    assert_launched(xen_efi_debug_launch)
+
+
+@expects_boot("xen_efi_debug_launch")
+@pytest.mark.skipif(
+    PSP is not None, reason="under the service the machine has no device without a PSP"
+)
+def test_efi_debug_launch_prints_after_the_handover(xen_efi_debug_launch: Boot):
+    """GRUB's debug print from its launch code, which Xen calls after it
+    exited the boot services, reaches the serial console whole. GRUB's
+    serial terminal wraps long lines, so whitespace is not compared."""
+    console = " ".join(strip_ansi(xen_efi_debug_launch.console).split())
+    _, found, after = console.partition(XEN_EFI_LOADER)
+    assert found, "Xen's EFI loader never ran"
+    assert GRUB_NO_PSP in after, after[:2000]
 
 
 def test_efi_normal_boot_launches_nothing(xen_efi: Boot):
