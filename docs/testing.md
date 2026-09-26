@@ -260,6 +260,36 @@ the fixtures it took and its outcome, where an expected failure is
 `xfailed` and an unexpected pass `xpassed` rather than the `skipped`
 and `failed` of `results.txt`. The report below is rendered from these.
 
+## Launch output without a serial port
+
+On a machine without a serial port, the fork's builds of GRUB and the SKL
+keep their launch output in two more places, both only with
+`set debug=slaunch`, which the fork's `grub.cfg` has:
+
+- The screen. After the boot services are gone GRUB prints its debug
+    lines on the GOP framebuffer, and a DEBUG SKL prints there too. The
+    SKL skips hex dumps, and refuses a framebuffer above 4 GiB, which
+    GRUB warns about on screen. In QEMU the machine needs a display
+    device for this, `tb-boot -g` adds one.
+- A ring buffer in RAM, 0x40000 bytes at 0x10000000 unless
+    `slaunch_log_addr` and `slaunch_log_size` say otherwise. GRUB claims
+    it as reserved memory at the `slaunch` command and writes its output
+    there, and the SKL appends its own, hex dumps included. A reset
+    usually leaves DRAM alone, so after a launch that reboots the
+    machine the menu entry "Show the last launch log" prints it on the
+    next boot, before the next launch overwrites it. It says "no launch
+    log" after a power cycle, or when the firmware clears memory at
+    reset. You can also read the log from Linux, where it holds the
+    launch that started this boot:
+
+    ```sh
+    dd if=/dev/mem bs=1 skip=$((0x10000000)) count=$((0x40000)) | strings
+    ```
+
+    The output starts with `SLDBGLOG`, the magic of the region's header.
+
+The suite does not assert on either.
+
 ## The matrix in CI
 
 `.github/workflows/ci.yml` lints every push and pull request, and on
