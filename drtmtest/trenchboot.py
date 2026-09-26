@@ -37,10 +37,10 @@ _IMAGE_URL = (
     "{tag}/tb-full-image-genericx86-64.rootfs.wic.gz"
 )
 RELEASES: dict[str, Release] = {
-    "amd-drtm-test-image": Release(
+    "amd-drtm-test-image-2": Release(
         Asset(
-            url=_IMAGE_URL.format(owner="iwanicki92", tag="amd-drtm-test-image"),
-            sha256="1440fa6548b419ba99dde5de4b262f2e3e3ebb0f6addbea62f0e68b96bca7a13",
+            url=_IMAGE_URL.format(owner="iwanicki92", tag="amd-drtm-test-image-2"),
+            sha256="99ae20e13acd7af2224bdb1e3b6904238c63f95459e21e9a9bf51d5286015aac",
         ),
         upstream=False,
     ),
@@ -57,7 +57,7 @@ RELEASES: dict[str, Release] = {
         )
     ),
 }
-DEFAULT_RELEASE = "amd-drtm-test-image"
+DEFAULT_RELEASE = "amd-drtm-test-image-2"
 
 
 def local_image() -> Path | None:

@@ -92,10 +92,10 @@ def _row(page: str, section: str, label: str) -> list[str]:
 @pytest.fixture
 def results() -> list[dict]:
     return [
-        _result("amd-drtm-test-image", "classic", ALL_GOOD),
+        _result("amd-drtm-test-image-2", "classic", ALL_GOOD),
         _result("v0.5.2", "classic", UPSTREAM),
         _result("v0.5.3-rc1", "classic", RC),
-        _result("amd-drtm-test-image", "psp", ALL_GOOD),
+        _result("amd-drtm-test-image-2", "psp", ALL_GOOD),
     ]
 
 
@@ -120,7 +120,7 @@ def test_a_release_without_results_is_a_missing_column(results: list[dict]):
     header = psp.strip().splitlines()[0]
     assert [c.strip() for c in header.strip("|").split("|")] == [
         "Entry",
-        "amd-drtm-test-image",
+        "amd-drtm-test-image-2",
         "v0.5.2",
         "v0.5.3-rc1",
     ]
@@ -148,7 +148,7 @@ def test_the_sections_and_columns_follow_the_matrix_order(results: list[dict]):
     assert page.index("## Without PSP, TPM with SHA-1 and SHA-256") < page.index(
         "## With PSP DRTM service, TPM with SHA-1 and SHA-256"
     )
-    assert list(badges) == ["amd-drtm-test-image", "v0.5.2", "v0.5.3-rc1"]
+    assert list(badges) == ["amd-drtm-test-image-2", "v0.5.2", "v0.5.3-rc1"]
 
 
 def test_the_header_names_the_commit_the_run_and_the_tools(results: list[dict]):
@@ -162,9 +162,9 @@ def test_the_header_names_the_commit_the_run_and_the_tools(results: list[dict]):
 
 def test_a_badge_is_green_only_when_every_configuration_passed(results: list[dict]):
     _, badges = render(results)
-    assert badges["amd-drtm-test-image"] == {
+    assert badges["amd-drtm-test-image-2"] == {
         "schemaVersion": 1,
-        "label": "amd-drtm-test-image",
+        "label": "amd-drtm-test-image-2",
         "message": "8 passed",
         "color": "brightgreen",
     }
@@ -186,7 +186,7 @@ def test_a_missing_configuration_alone_is_red_too():
     _, badges = render(
         [
             _result("v0.5.2", "classic", ALL_GOOD),
-            _result("amd-drtm-test-image", "psp", ALL_GOOD),
+            _result("amd-drtm-test-image-2", "psp", ALL_GOOD),
         ]
     )
     assert badges["v0.5.2"] == {
