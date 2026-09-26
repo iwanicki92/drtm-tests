@@ -101,21 +101,32 @@ def unsupported_binary(
     return None
 
 
+# The TPM kinds a boot can have: a TPM 2.0 behind either frontend, or a
+# TPM 1.2, which predates CRB, behind TIS.
+TPM_KINDS = ("tis", "crb", "tis-1.2")
+
+
+def tpm_is_1_2(kind: str) -> bool:
+    return kind == "tis-1.2"
+
+
 def tpm_args(sock: str, kind: str = "tis") -> list[str]:
-    """An swtpm on `sock` as a TPM 2.0 behind the `tis` or `crb` frontend.
+    """An swtpm on `sock` behind the frontend `kind` names, one of
+    `TPM_KINDS`.
 
     QEMU's `emulator` backend drives swtpm over its control channel, so one
     socket serves both.
     """
-    if kind not in ("tis", "crb"):
-        raise ValueError(f"tpm must be 'tis' or 'crb', got {kind!r}")
+    if kind not in TPM_KINDS:
+        raise ValueError(f"tpm must be one of {', '.join(TPM_KINDS)}, got {kind!r}")
+    frontend = "tis" if tpm_is_1_2(kind) else kind
     return [
         "-chardev",
         f"socket,id=chrtpm,path={sock}",
         "-tpmdev",
         "emulator,id=tpm0,chardev=chrtpm",
         "-device",
-        f"tpm-{kind},tpmdev=tpm0",
+        f"tpm-{frontend},tpmdev=tpm0",
     ]
 
 
@@ -187,6 +198,7 @@ class Settings:
 
 
 _STATE_FILE = "tpm2-00.permall"
+_STATE_FILE_1_2 = "tpm-00.permall"
 
 
 def _wait_for_socket(process: subprocess.Popen, sock: str, what: str) -> None:
@@ -234,6 +246,26 @@ def allocate_pcr_banks(
         raise RuntimeError(f"swtpm_setup wrote no {_STATE_FILE} into {state_dir}")
 
 
+def manufacture_tpm_1_2(
+    state_dir: Path,
+    log_f,
+    program: str = "swtpm_setup",
+    env: Mapping[str, str] | None = None,
+) -> None:
+    """Writes a fresh TPM 1.2 state into `state_dir`, which has one SHA-1
+    bank and nothing to choose."""
+    state_dir.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [program, "--tpmstate", str(state_dir), "--overwrite"],
+        stdout=log_f,
+        stderr=subprocess.STDOUT,
+        check=True,
+        env=env,
+    )
+    if not (state_dir / _STATE_FILE_1_2).exists():
+        raise RuntimeError(f"swtpm_setup wrote no {_STATE_FILE_1_2} into {state_dir}")
+
+
 def start_swtpm(
     state_dir: Path,
     sock: str,
@@ -242,8 +274,10 @@ def start_swtpm(
     log_level: str | None = None,
     programs: tuple[str, str] = ("swtpm_setup", "swtpm"),
     env: Mapping[str, str] | None = None,
+    tpm_1_2: bool = False,
 ) -> subprocess.Popen:
-    """Starts a TPM 2.0 emulator on a Unix socket and waits for the socket.
+    """Starts a TPM emulator on a Unix socket and waits for the socket: a
+    TPM 2.0, or a TPM 1.2 with `tpm_1_2`, which ignores `banks`.
 
     `state_dir` gets a fresh state with `banks` active first, what
     `pcr_banks()` says when that is None. `programs` are `swtpm_setup`
@@ -258,17 +292,20 @@ def start_swtpm(
     """
     state_dir.mkdir(parents=True, exist_ok=True)
     setup, swtpm = programs
-    allocate_pcr_banks(
-        state_dir,
-        banks if banks is not None else pcr_banks(),
-        log_f,
-        program=setup,
-        env=env,
-    )
+    if tpm_1_2:
+        manufacture_tpm_1_2(state_dir, log_f, program=setup, env=env)
+    else:
+        allocate_pcr_banks(
+            state_dir,
+            banks if banks is not None else pcr_banks(),
+            log_f,
+            program=setup,
+            env=env,
+        )
     args = [
         swtpm,
         "socket",
-        "--tpm2",
+        *([] if tpm_1_2 else ["--tpm2"]),
         "--tpmstate",
         f"dir={state_dir}",
         "--ctrl",
@@ -411,6 +448,7 @@ class QemuVm:
                 log_level=self.settings.swtpm_log_level,
                 programs=(self.settings.swtpm_setup, self.settings.swtpm),
                 env=self.settings.environment,
+                tpm_1_2=tpm_is_1_2(self.tpm),
             )
             args += tpm_args(self._swtpm_sock, self.tpm)
         self._qmp_sock = _short_socket_path("drtmtest-qmp-")

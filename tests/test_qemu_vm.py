@@ -14,7 +14,13 @@ from pathlib import Path
 import pytest
 
 from drtmtest import machine
-from drtmtest.qemu_vm import QemuVm, Settings, allocate_pcr_banks
+from drtmtest.qemu_vm import (
+    QemuVm,
+    Settings,
+    allocate_pcr_banks,
+    manufacture_tpm_1_2,
+    tpm_args,
+)
 
 
 def test_settings_hold_what_the_environment_said_when_read(monkeypatch):
@@ -119,3 +125,21 @@ def test_the_program_runs_in_the_environment_given(tmp_path: Path, monkeypatch):
             env={"DRTMTEST_MARK": "given"},
         )
     assert (tmp_path / "state" / "tpm2-00.permall").read_text() == "given\n"
+
+
+def test_a_tpm_1_2_sits_behind_tis():
+    args = tpm_args("sock", "tis-1.2")
+    assert "tpm-tis,tpmdev=tpm0" in args
+
+
+def test_a_tpm_1_2_state_is_written_without_tpm2(tmp_path: Path):
+    script = tmp_path / "swtpm_setup"
+    script.write_text(
+        "#!/bin/sh\n"
+        'while [ "$1" != --tpmstate ]; do shift; done\n'
+        'echo "$@" > "$2/tpm-00.permall"\n'
+    )
+    script.chmod(0o755)
+    with open(tmp_path / "swtpm.log", "wb") as log:
+        manufacture_tpm_1_2(tmp_path / "state", log, program=str(script))
+    assert "--tpm2" not in (tmp_path / "state" / "tpm-00.permall").read_text()

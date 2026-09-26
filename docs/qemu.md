@@ -155,7 +155,9 @@ The swtpm side:
 
 - `socket` serves QEMU over a socket rather than a character device.
 - `--tpm2` makes it a TPM 2.0, which has the DRTM PCRs 17 to 22 and the
-    locality 4 start that resets them.
+    locality 4 start that resets them. A `QemuVm` given `tpm="tis-1.2"`
+    leaves it off for a TPM 1.2 behind TIS, with its one SHA-1 bank, which
+    the same locality 4 start resets. `tb-boot` always uses a TPM 2.0.
 - `--tpmstate dir=...` holds the NVRAM. The tests make a fresh one per boot,
     `tb-boot` reseeds the one under `run/` on every start.
 - `--ctrl type=unixio,path=...` is the control socket. QEMU's `emulator`
