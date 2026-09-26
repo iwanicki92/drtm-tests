@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """GRUB's configuration as the image carries it, read off the FAT boot
-partition with mtools, no mount and no copy, and a menu entry's commands
-with a kernel parameter added, for a boot typed at GRUB's shell.
+partition with mtools, no mount and no copy, and a menu entry's commands,
+a kernel parameter added if asked, for a boot typed at GRUB's shell.
 """
 
 import re
@@ -88,12 +88,18 @@ def with_parameter(commands: list[str], parameter: str) -> list[str]:
 
 
 def commands(
-    image: Path, title: str, parameter: str, env: Mapping[str, str] | None = None
+    image: Path,
+    title: str,
+    parameter: str | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> list[str]:
-    """The commands of the image's entry `title` with `parameter` added
-    to its kernel command line. `env` is `mtype`'s environment: a boot on
-    its own thread passes its `Settings.environment`."""
+    """The commands of the image's entry `title`, with `parameter` added
+    to its kernel command line unless it is None. `env` is `mtype`'s
+    environment: a boot on its own thread passes its
+    `Settings.environment`."""
     found = entries(read(image, env=env))
     if title not in found:
         raise LookupError(f"no GRUB entry {title!r} in the image, it has {list(found)}")
+    if parameter is None:
+        return found[title]
     return with_parameter(found[title], parameter)

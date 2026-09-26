@@ -7,6 +7,7 @@ GRUB menu, the OS banner, the login and commands at the shell.
 """
 
 import re
+import time
 from dataclasses import dataclass
 
 from drtmtest.dasharo import BOOT_PROMPT
@@ -41,6 +42,11 @@ KEY_DOWN = b"\x1b[B"
 # guest can read the key's escape sequence as three plain keys and move
 # nothing, so a move that draws nothing is pressed once more.
 KEY_TIMEOUT = 10.0
+
+# The gap between the keys of a command typed at GRUB's shell. Under
+# Dasharo, a line sent at once reaches the shell with characters lost and
+# reordered, while one key at a time arrives whole.
+TYPING_INTERVAL = 0.03
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b[()][A-Z0-9]|\x1b[=>]")
 # A hypervisor line, wherever it lands. Xen ends it with a newline, so
@@ -135,10 +141,16 @@ class Console:
         # GRUB echoes every character between cursor moves, so the echo
         # is not matched, only the prompt that follows the command's run.
         for command in commands:
-            self.vm.send(command.encode() + b"\r")
+            self._type(command)
             self.vm.expect(GRUB_PROMPT, self.command_timeout)
-        self.vm.send(b"boot\r")
+        self._type("boot")
         return titles
+
+    def _type(self, command: str) -> None:
+        """One line at GRUB's shell, a key at a time."""
+        for key in command.encode() + b"\r":
+            self.vm.send(bytes([key]))
+            time.sleep(TYPING_INTERVAL)
 
     def wait_for_login(self, banner: str) -> None:
         """Waits for the OS banner and then the login prompt, answering the
