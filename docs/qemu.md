@@ -337,7 +337,12 @@ with it and the hardware where they did not:
     in 64 KiB units at `tmr-desc-base`, `ALLOCATE_SHARED_MEMORY` grants
     up to 64 KiB of guest-writable RAM at `shared-base`, and
     `GET_IVRS_TABLE_INFO` hands out a copy of the machine's IVRS at
-    `ivrs-base`. No boot here issues them.
+    `ivrs-base`. No boot here issues them. An IVRS over 4 KiB is not
+    handed out, and says so once on stderr.
+
+The device refuses to start where the three regions, the event log or the
+ASPT window overlap, or where `delayed-command` is set without a
+`command-delay`.
 
 Every guest-error line above stops a strict VM, like the platform's own
 rules.
