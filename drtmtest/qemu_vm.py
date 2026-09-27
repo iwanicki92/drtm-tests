@@ -537,6 +537,11 @@ class QemuVm:
             tail = "\n".join(tail)
         return f"QEMU exited with {self._process.returncode}\n{tail}"
 
+    @property
+    def running(self) -> bool:
+        """Whether the QEMU process is still there."""
+        return self._process is not None and self._process.poll() is None
+
     def _check_alive(self) -> None:
         """Raises if QEMU is gone or the VM stopped as panicked.
 
