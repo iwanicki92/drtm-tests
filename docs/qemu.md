@@ -339,6 +339,10 @@ with it and the hardware where they did not:
     `GET_IVRS_TABLE_INFO` hands out a copy of the machine's IVRS at
     `ivrs-base`. No boot here issues them. An IVRS over 4 KiB is not
     handed out, and says so once on stderr.
+- `PROCESS_SMM` and `GET_SMM_POLICY` are client commands, invalid here
+    unless `client-smm=on`. Then, after a launch, they answer with zeroed
+    hashes and an empty SMM policy from a read-only page at `0xfedb3000`,
+    which AMD's client Secure Loader accepts. No boot here sets it.
 
 The device refuses to start where the three regions, the event log or the
 ASPT window overlap, or where `delayed-command` is set without a
