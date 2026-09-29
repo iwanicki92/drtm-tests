@@ -129,7 +129,24 @@ def test_the_program_runs_in_the_environment_given(tmp_path: Path, monkeypatch):
 
 def test_a_tpm_1_2_sits_behind_tis():
     args = tpm_args("sock", "tis-1.2")
-    assert "tpm-tis,tpmdev=tpm0" in args
+    assert "tpm-tis,tpmdev=tpm0,locality0-drops-hash=on" in args
+
+
+def test_a_tis_frontend_drops_the_hash_unless_told_not_to():
+    assert "tpm-tis,tpmdev=tpm0,locality0-drops-hash=on" in tpm_args("sock")
+    assert "tpm-tis,tpmdev=tpm0" in tpm_args("sock", drops_hash=False)
+    assert "tpm-crb,tpmdev=tpm0" in tpm_args("sock", "crb")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"), [(None, True), ("on", True), ("off", False)]
+)
+def test_the_hash_drop_follows_the_environment(monkeypatch, value, expected):
+    if value is None:
+        monkeypatch.delenv("DRTM_LOCALITY0_DROPS_HASH", raising=False)
+    else:
+        monkeypatch.setenv("DRTM_LOCALITY0_DROPS_HASH", value)
+    assert Settings.from_environment().drops_hash is expected
 
 
 def test_a_tpm_1_2_state_is_written_without_tpm2(tmp_path: Path):

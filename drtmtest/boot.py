@@ -25,6 +25,7 @@ from drtmtest import machine, trenchboot
 from drtmtest.dasharo import FIRMWARE
 from drtmtest.qemu_vm import (
     binary,
+    locality0_drops_hash,
     pflash_args,
     qmp_args,
     start_swtpm,
@@ -110,7 +111,7 @@ def main() -> int:
             snapshot=not opts.writable,
             psp=opts.psp,
         ),
-        *tpm_args(str(swtpm_sock)),
+        *tpm_args(str(swtpm_sock), drops_hash=locality0_drops_hash()),
         *qmp_args(str(qmp_sock)),
     ]
     if opts.graphics:

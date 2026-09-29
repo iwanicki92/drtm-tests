@@ -110,9 +110,22 @@ def tpm_is_1_2(kind: str) -> bool:
     return kind == "tis-1.2"
 
 
-def tpm_args(sock: str, kind: str = "tis") -> list[str]:
+def locality0_drops_hash() -> bool:
+    """Whether a TIS frontend drops SKINIT's hash while locality 0 is
+    active, as a discrete TPM on Turin firmware does: on unless
+    `DRTM_LOCALITY0_DROPS_HASH` is `off`."""
+    value = os.environ.get("DRTM_LOCALITY0_DROPS_HASH", "").strip().lower()
+    if value in ("", "on"):
+        return True
+    if value == "off":
+        return False
+    raise RuntimeError(f"DRTM_LOCALITY0_DROPS_HASH={value!r} is not on or off")
+
+
+def tpm_args(sock: str, kind: str = "tis", drops_hash: bool = True) -> list[str]:
     """An swtpm on `sock` behind the frontend `kind` names, one of
-    `TPM_KINDS`.
+    `TPM_KINDS`. `drops_hash` has a TIS frontend drop the locality 4 hash
+    while locality 0 is active.
 
     QEMU's `emulator` backend drives swtpm over its control channel, so one
     socket serves both.
@@ -120,13 +133,16 @@ def tpm_args(sock: str, kind: str = "tis") -> list[str]:
     if kind not in TPM_KINDS:
         raise ValueError(f"tpm must be one of {', '.join(TPM_KINDS)}, got {kind!r}")
     frontend = "tis" if tpm_is_1_2(kind) else kind
+    device = f"tpm-{frontend},tpmdev=tpm0"
+    if frontend == "tis" and drops_hash:
+        device += ",locality0-drops-hash=on"
     return [
         "-chardev",
         f"socket,id=chrtpm,path={sock}",
         "-tpmdev",
         "emulator,id=tpm0,chardev=chrtpm",
         "-device",
-        f"tpm-{frontend},tpmdev=tpm0",
+        device,
     ]
 
 
@@ -183,6 +199,8 @@ class Settings:
     swtpm_setup: str = "swtpm_setup"
     swtpm: str = "swtpm"
     environment: Mapping[str, str] = field(default_factory=os.environ.copy)
+    # A TIS frontend drops SKINIT's hash while locality 0 is active
+    drops_hash: bool = True
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -194,6 +212,7 @@ class Settings:
             shutil.which("swtpm_setup") or "swtpm_setup",
             shutil.which("swtpm") or "swtpm",
             os.environ.copy(),
+            locality0_drops_hash(),
         )
 
 
@@ -450,7 +469,7 @@ class QemuVm:
                 env=self.settings.environment,
                 tpm_1_2=tpm_is_1_2(self.tpm),
             )
-            args += tpm_args(self._swtpm_sock, self.tpm)
+            args += tpm_args(self._swtpm_sock, self.tpm, self.settings.drops_hash)
         self._qmp_sock = _short_socket_path("drtmtest-qmp-")
         args += qmp_args(self._qmp_sock)
         serial_port = _free_tcp_port()

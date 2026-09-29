@@ -74,7 +74,7 @@ qemu-system-x86_64 \
     -device amd-iommu,pci-id=amd-drtm-iommu,firmware-enabled=on,dma-remap=on \
     -chardev socket,id=chrtpm,path=swtpm.sock \
     -tpmdev emulator,id=tpm0,chardev=chrtpm \
-    -device tpm-tis,tpmdev=tpm0 \
+    -device tpm-tis,tpmdev=tpm0,locality0-drops-hash=on \
     -drive file=image.wic,format=raw,if=none,id=hd,snapshot=on \
     -device ide-hd,drive=hd \
     -display none -vga none -nic none \
@@ -137,7 +137,7 @@ PSP-assisted launch path [The PSP device](#the-psp-device) describes.
 | `-device amd-iommu,pci-id=amd-drtm-iommu,firmware-enabled=on,dma-remap=on` | The IOMMU itself, bound to that function. `firmware-enabled` leaves it enabled as firmware would, which SKL relies on. `dma-remap` makes it translate rather than pass DMA through, which a Linux booted directly needs to find its disk. Its `ivrs` default publishes the IVRS table.                                                                                                                                                                                                                                                                                                                                  |
 | `-chardev socket,id=chrtpm,path=...`                                       | The Unix socket swtpm serves its control channel on.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `-tpmdev emulator,id=tpm0,chardev=chrtpm`                                  | QEMU's swtpm backend. This is the backend that carries the locality 4 hash sequence, so a launch can extend PCR 17.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `-device tpm-tis,tpmdev=tpm0`                                              | The TIS frontend at its usual MMIO. The launch hashes the SLB through it, at locality 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `-device tpm-tis,tpmdev=tpm0,locality0-drops-hash=on`                      | The TIS frontend at its usual MMIO. The launch hashes the SLB through it, at locality 4, and with locality 0 still active the hash is dropped, as [A broken rule](#a-broken-rule) describes.                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `-drive file=...,format=raw,if=none,id=hd,snapshot=on`                     | The unpacked image, opened as a raw disk. `snapshot=on` throws writes away so boots do not change the cached file. `tb-boot -w` makes it writable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `-device ide-hd,drive=hd`                                                  | The disk on Q35's AHCI controller, which both firmwares boot from and both kernels find.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `-display none -vga none -nic none`                                        | No window, no VGA and no network card: everything goes over serial, and a NIC would add a DMA-capable device the tests do not use. `tb-boot -g` shows a standard VGA card in an SDL window.                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -213,7 +213,9 @@ In the order they appear:
 - `amd_drtm_hash ...: ok`: the first `length` bytes of the SLB went to the
     TPM at locality 4, which reset PCRs 17 to 22 and extended 17. `failed`
     means the SLB was not readable memory, `unsupported` a TPM with no
-    locality 4 path or none at all. PCR 17 then stays at all ones.
+    locality 4 path or none at all, `dropped` a TPM with
+    `locality0-drops-hash=on` that found locality 0 active. PCR 17 then
+    stays at all ones.
 - `x86_vm_cr_write cpu 0 0x7 -> 0x3`: a write to the VM_CR MSR by CPU 0,
     shown as the value before the write, then the value after it. The
     bits are DPD (bit 0), R_INIT (bit 1), DIS_A20M (bit 2), LOCK (bit 3)
@@ -288,6 +290,17 @@ The rules are:
 - `SKINIT` while another CPU is not parked in wait-for-SIPI.
 - `STGI` with R_INIT still set, after which an INIT would arrive as `#SX`.
 - SL_DEV released with no launch active.
+- `SKINIT` while TPM locality 0 is active, with `locality0-drops-hash=on`
+    on the TIS frontend.
+
+`tpm-tis,locality0-drops-hash=on` models a discrete TPM on Turin
+firmware that drops the locality 4 hash while locality 0 is active:
+PCRs 17 to 22 keep their startup values. QEMU leaves it off, and the
+harness turns it on for every TIS frontend unless
+`DRTM_LOCALITY0_DROPS_HASH=off`. Dasharo hands over with locality 0
+active, and GRUB relinquishes it before `SKINIT` only when it finds no
+PSP, so under `DRTM_PSP=on` an image without that release fails its
+launches.
 
 The rule texts cite the APM section they come from. Anything else under
 `-d guest_errors`, such as a write to an unmapped address, is not a launch
