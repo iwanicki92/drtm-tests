@@ -6,7 +6,7 @@ SPDX-License-Identifier: BSD-3-Clause
 
 # drtm-tests
 
-[![amd-drtm-test-image-2][badge-fork]][results]
+[![amd-drtm-test-image-3][badge-fork]][results]
 [![v0.5.2][badge-v0.5.2]][results]
 [![v0.5.3-rc1][badge-v0.5.3-rc1]][results]
 
@@ -55,14 +55,14 @@ writes its logs to a numbered directory under `logs/`.
 | Variable           | Default                 | Meaning                                                                                                       |
 |--------------------|-------------------------|---------------------------------------------------------------------------------------------------------------|
 | `DRTM_QEMU_BINARY` | none, required          | The `drtm` branch's `qemu-system-x86_64`.                                                                     |
-| `DRTM_TB_RELEASE`  | `amd-drtm-test-image-2` | Image release to boot, a tag pinned in `drtmtest/trenchboot.py`.                                              |
+| `DRTM_TB_RELEASE`  | `amd-drtm-test-image-3` | Image release to boot, a tag pinned in `drtmtest/trenchboot.py`.                                              |
 | `DRTM_TB_IMAGE`    | unset                   | A local `.wic` to boot instead, read in place. No entry is expected broken on it. Excludes `DRTM_TB_RELEASE`. |
 | `DRTM_PSP`         | `off`                   | Adds the PSP DRTM service, see below.                                                                         |
 | `DRTM_PCR_BANKS`   | `sha1,sha256`           | PCR banks active in every boot's TPM.                                                                         |
 | `DRTM_QEMU_ARGS`   | unset                   | Words appended to every QEMU command line, so what they repeat wins. `tb-boot` takes the same after `--`.     |
 | `DRTM_QEMU_ACCEL`  | `tcg`                   | `kvm` boots the normal entries faster and cannot run the launches.                                            |
 
-The default image is the `amd-drtm-test-image-2` release of [our
+The default image is the `amd-drtm-test-image-3` release of [our
 meta-trenchboot fork][tb-fork], a build of its `amd-drtm` branch with
 both SKL builds and the fixes the upstream releases lack.
 
@@ -115,6 +115,6 @@ from third-party Apache-2.0 code and stays under that license, see
 [qemu-fork]: https://github.com/iwanicki92/qemu/tree/drtm
 [tb-fork]: https://github.com/iwanicki92/meta-trenchboot/tree/amd-drtm
 [results]: https://github.com/iwanicki92/drtm-tests/blob/results/README.md
-[badge-fork]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/amd-drtm-test-image-2.json
+[badge-fork]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/amd-drtm-test-image-3.json
 [badge-v0.5.2]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/v0.5.2.json
 [badge-v0.5.3-rc1]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/v0.5.3-rc1.json
