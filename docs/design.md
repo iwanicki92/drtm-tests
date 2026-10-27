@@ -35,6 +35,11 @@ would otherwise only log stops the VM as a panic, and the panic action is
 set to pause so the stopped VM stays for the harness to see, which reports
 it within a second instead of at the timeout.
 
+`DRTM_VENDOR=intel` swaps the machine for Intel's: `txt=on` with the
+platform set up as TXT firmware leaves it, VT-d, and a `Skylake-Client`
+CPU with SMX, launched through `GETSEC[SENTER]`. The rest of the boot is
+the same, but there is no launch record, no strict mode and no PSP.
+
 The serial console is the only way in. A reader thread drains it into
 `serial.log` for the life of the boot, and the driver waits for prompts
 from a cursor that advances with every match, so a prompt seen twice is
@@ -78,6 +83,14 @@ so PCR 17 has to stay and PCR 18 has to move, and the measurement is
 shown to cover what it claims. And the launched OS has to have its IOMMU
 up: the DLME released SL_DEV, and what keeps device DMA out of the
 launched kernel from then on is the IOMMU.
+
+Every launch, on either vendor, also has to reach the shell with PCR 17
+and 18 extended in every bank, since a launch that fails falls back to a
+normal boot of the default entry, to have the OS bring up every CPU the
+machine has, since the launch puts the APs to sleep and only the OS
+wakes them, and to boot without a panic, a GRUB error nothing expects or
+a guest error QEMU logs. The platform's record, the `SKINIT` replay and
+the debug launch are AMD's alone.
 
 What the upstream releases are known to get wrong, entries that do not
 boot, a log declaring banks the TPM lacks, and the classic SKL under the

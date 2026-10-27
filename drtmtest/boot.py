@@ -5,8 +5,8 @@
 """`tb-boot`: the same boot as the tests, by hand, with the console on stdio.
 
     tb-boot [-f dasharo|seabios] [-m MEM] [-s SMP] [-w] [-n] [-g]
-            [--no-strict] [--psp] [-- QEMU ARGS]
-    tb-boot query          query-amd-drtm on the running instance
+            [--vendor amd|intel] [--no-strict] [--psp] [-- QEMU ARGS]
+    tb-boot query          query-amd-drtm on the running AMD instance
 
 Ctrl-A x quits, Ctrl-A c switches to the monitor. The firmware copy, the
 TPM state, the QMP socket and qemu.log live under run/ in this repository.
@@ -52,7 +52,9 @@ def main() -> int:
         default="dasharo",
         help="Dasharo's UEFI build as flash, or QEMU's SeaBIOS for legacy boot",
     )
-    parser.add_argument("-m", "--mem", default=machine.DEFAULT_MEM)
+    parser.add_argument(
+        "-m", "--mem", help="the guest's memory, 2G on AMD and 3G on Intel"
+    )
     parser.add_argument("-s", "--smp", type=int, default=machine.DEFAULT_SMP)
     parser.add_argument(
         "-w", "--writable", action="store_true", help="write to the image, no snapshot"
@@ -67,7 +69,13 @@ def main() -> int:
         help="a standard VGA card shown in an SDL window",
     )
     parser.add_argument(
-        "--no-strict", action="store_true", help="log broken rules only"
+        "--vendor",
+        choices=machine.VENDORS,
+        default=machine.vendor(),
+        help="AMD's launch machine or Intel's, as DRTM_VENDOR picks",
+    )
+    parser.add_argument(
+        "--no-strict", action="store_true", help="log broken rules only, on AMD"
     )
     parser.add_argument(
         "--psp",
@@ -77,6 +85,8 @@ def main() -> int:
     )
     parser.add_argument("rest", nargs="*", help="'query', or QEMU arguments after --")
     opts = parser.parse_args()
+    if opts.vendor == "intel" and opts.psp:
+        parser.error("the PSP is AMD's, the Intel machine has none")
 
     qmp_sock = RUN_DIR / "qmp.sock"
     if opts.rest[:1] == ["query"]:
@@ -110,6 +120,7 @@ def main() -> int:
             strict=not opts.no_strict,
             snapshot=not opts.writable,
             psp=opts.psp,
+            vendor=opts.vendor,
         ),
         *tpm_args(str(swtpm_sock), drops_hash=locality0_drops_hash()),
         *qmp_args(str(qmp_sock)),
@@ -125,7 +136,8 @@ def main() -> int:
         return 0
 
     print(f"traces and guest errors go to {RUN_DIR / 'qemu.log'}", file=sys.stderr)
-    print("query the launch record with: tb-boot query", file=sys.stderr)
+    if opts.vendor == "amd":
+        print("query the launch record with: tb-boot query", file=sys.stderr)
     with open(RUN_DIR / "swtpm.log", "wb") as swtpm_log:
         swtpm = start_swtpm(RUN_DIR / "tpmstate", str(swtpm_sock), swtpm_log)
         try:

@@ -7,7 +7,8 @@ through SeaBIOS, and the normal Linux boot: the kernel booted directly is
 the one that found no disk when the launch machine's IOMMU passed DMA
 through, so it stays under test."""
 
-from conftest import Boot, expects_boot, expects_skls_banks
+import pytest
+from conftest import VENDOR, Boot, expects_boot, expects_skls_banks
 from test_xen import (
     assert_iommu_up,
     assert_launched,
@@ -16,21 +17,28 @@ from test_xen import (
     assert_not_launched,
 )
 
-# What the kernel prints on a launch it recognises, as seen on hardware:
-# the early setup in the decompressor's slaunch code, then the module.
-LINUX_SETUP_DONE = "slaunch: AMD SKINIT setup complete"
-LINUX_MODULE_UP = "slmodule: SKINIT Secure Launch module setup"
+# What the kernel prints on a launch it recognises, by vendor: the early
+# setup in the decompressor's slaunch code, then the module.
+LINUX_SETUP_DONE = {
+    "amd": "slaunch: AMD SKINIT setup complete",
+    "intel": "slaunch: Intel TXT setup complete",
+}
+LINUX_MODULE_UP = {
+    "amd": "slmodule: SKINIT Secure Launch module setup",
+    "intel": "slmodule: TXT Secure Launch module setup",
+}
 
 
 def assert_seen_by_linux(boot: Boot) -> None:
     """The kernel's own view of the launch: the early setup done, the
     module up and its securityfs entry there."""
-    assert LINUX_SETUP_DONE in boot.dmesg, boot.dmesg
-    assert LINUX_MODULE_UP in boot.dmesg, boot.dmesg
+    assert LINUX_SETUP_DONE[VENDOR] in boot.dmesg, boot.dmesg
+    assert LINUX_MODULE_UP[VENDOR] in boot.dmesg, boot.dmesg
     assert "No such file" not in boot.securityfs, boot.securityfs
 
 
 @expects_boot("linux_launch")
+@pytest.mark.amd_only
 def test_launch_is_recorded_by_the_platform(linux_launch: Boot):
     assert_launched(linux_launch)
 
@@ -46,6 +54,7 @@ def test_launch_brings_the_iommu_up(linux_launch: Boot):
 
 
 @expects_boot("linux_launch")
+@pytest.mark.amd_only
 def test_launch_log_replays_to_the_pcrs(linux_launch: Boot):
     assert_log_replays(linux_launch)
 
@@ -57,6 +66,7 @@ def test_launch_log_declares_the_tpms_banks(linux_launch: Boot):
 
 
 @expects_boot("linux_legacy_launch")
+@pytest.mark.amd_only
 def test_legacy_launch_is_recorded_by_the_platform(linux_legacy_launch: Boot):
     assert_launched(linux_legacy_launch)
 
@@ -72,6 +82,7 @@ def test_legacy_launch_brings_the_iommu_up(linux_legacy_launch: Boot):
 
 
 @expects_boot("linux_legacy_launch")
+@pytest.mark.amd_only
 def test_legacy_launch_log_replays_to_the_pcrs(linux_legacy_launch: Boot):
     assert_log_replays(linux_legacy_launch)
 
@@ -83,6 +94,7 @@ def test_legacy_launch_log_declares_the_tpms_banks(linux_legacy_launch: Boot):
 
 
 @expects_boot("linux_alt_launch")
+@pytest.mark.amd_only
 def test_alt_launch_is_recorded_by_the_platform(linux_alt_launch: Boot):
     assert_launched(linux_alt_launch)
 
@@ -94,6 +106,7 @@ def test_alt_launch_is_seen_by_linux(linux_alt_launch: Boot):
 
 
 @expects_boot("linux_alt_launch")
+@pytest.mark.amd_only
 def test_alt_launch_log_replays_to_the_pcrs(linux_alt_launch: Boot):
     assert_log_replays(linux_alt_launch)
 

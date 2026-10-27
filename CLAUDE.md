@@ -11,9 +11,9 @@ Guidance for Claude Code when working in this repository.
 ## What this is
 
 A pytest suite that boots the meta-trenchboot image under our QEMU build,
-the one that runs `SKINIT`, one boot per GRUB entry, and a `tb-boot`
-command that does the same boot by hand. See `docs/design.md` for why and
-`docs/testing.md` for how. `README.md` covers running it.
+the one that runs `SKINIT` and Intel TXT, one boot per GRUB entry, and a
+`tb-boot` command that does the same boot by hand. See `docs/design.md`
+for why and `docs/testing.md` for how. `README.md` covers running it.
 
 ## Comments and docs
 

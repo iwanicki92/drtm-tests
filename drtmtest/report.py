@@ -6,8 +6,8 @@
 release: `python -m drtmtest.report <dir>` reads every `results.json`
 under `<dir>`, one per cell of the matrix, and writes `README.md` and
 `badges/<release>.json` into `--out`. The page has one section per
-configuration with a table of the GRUB entries against the releases,
-and the full per-test table folded under it.
+vendor and in it one per configuration, with a table of the GRUB entries
+against the releases and the full per-test table folded under it.
 """
 
 import argparse
@@ -17,7 +17,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from drtmtest import matrix, trenchboot
+from drtmtest import machine, matrix, trenchboot
 
 PASS = "✅"
 FAIL = "❌"
@@ -68,7 +68,15 @@ def _release(result: dict) -> str:
 
 
 def _configuration(result: dict) -> str:
-    return result["details"].get("configuration") or "custom"
+    """The matrix configuration, or a hand-made session's own per vendor."""
+    details = result["details"]
+    return details.get("configuration") or f"custom-{details.get('vendor') or 'amd'}"
+
+
+def _vendor(name: str, results: list[dict]) -> str:
+    if name in matrix.CONFIGURATIONS:
+        return matrix.CONFIGURATIONS[name].vendor
+    return results[0]["details"].get("vendor") or "amd"
 
 
 def _configuration_title(name: str, results: list[dict]) -> str:
@@ -103,7 +111,7 @@ def _section(name: str, cells: dict[str, dict], releases: list[str]) -> list[str
     """One configuration: the compact table, its notes and the full
     table. `cells` maps a release to its `results.json`."""
     results = [cells[release] for release in releases if release in cells]
-    lines = [f"## {_configuration_title(name, results)}", ""]
+    lines = [f"### {_configuration_title(name, results)}", ""]
     entries: dict[str, dict[str, Cell]] = defaultdict(lambda: defaultdict(Cell))
     tests: dict[str, dict[str, Cell]] = defaultdict(lambda: defaultdict(Cell))
     entry_order: list[str] = []
@@ -229,8 +237,15 @@ def render(
         sorted({_release(r) for r in results}), list(trenchboot.RELEASES)
     )
     lines = _header(results, run, run_url)
-    for name in configurations:
-        lines += _section(name, by_configuration[name], releases)
+    vendors = {
+        name: _vendor(name, list(by_configuration[name].values()))
+        for name in configurations
+    }
+    for vendor in _ordered(sorted(set(vendors.values())), list(machine.VENDORS)):
+        lines += [f"## {matrix.VENDOR_TITLES.get(vendor, vendor)}", ""]
+        for name in configurations:
+            if vendors[name] == vendor:
+                lines += _section(name, by_configuration[name], releases)
     badges = {
         release: _badge(release, by_configuration, configurations)
         for release in releases

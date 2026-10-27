@@ -20,13 +20,15 @@ from drtmtest import machine, qemu_vm, trenchboot
 
 @dataclass(frozen=True)
 class Configuration:
-    """One machine configuration: whether the boots get the Secure
-    Processor's DRTM service, the TPM's banks (`None` for the default
-    two), and the title the results tables give it."""
+    """One machine configuration: the vendor whose launch the boots take,
+    whether they get the Secure Processor's DRTM service, the TPM's banks
+    (`None` for the default two), and the title the results tables give
+    it under the vendor's."""
 
     title: str
     psp: bool = False
     banks: str | None = None
+    vendor: str = "amd"
 
     def env(self, release: str) -> dict[str, str]:
         """What the configuration sets for a release. The service goes
@@ -34,6 +36,8 @@ class Configuration:
         for the upstream releases, whose SKL never talks to it, so their
         launch tests are expected failures."""
         env = {}
+        if self.vendor != "amd":
+            env["DRTM_VENDOR"] = self.vendor
         if self.psp:
             upstream = trenchboot.RELEASES[release].upstream
             env["DRTM_PSP"] = "classic" if upstream else "on"
@@ -53,21 +57,38 @@ CONFIGURATIONS: dict[str, Configuration] = {
         "Without PSP, TPM with SHA-1, SHA-256 and SHA-384",
         banks="sha1,sha256,sha384",
     ),
+    "intel": Configuration("TPM with SHA-1 and SHA-256", vendor="intel"),
+    "intel-sha256": Configuration(
+        "TPM with SHA-256 alone", banks="sha256", vendor="intel"
+    ),
+    "intel-sha384": Configuration(
+        "TPM with SHA-1, SHA-256 and SHA-384",
+        banks="sha1,sha256,sha384",
+        vendor="intel",
+    ),
 }
 
+# The title the results give each vendor's configurations.
+VENDOR_TITLES = {"amd": "AMD SKINIT", "intel": "Intel TXT"}
+
 # What a configuration sets, cleared before its own environment goes in.
-_VARIABLES = ("DRTM_PSP", "DRTM_PCR_BANKS")
+_VARIABLES = ("DRTM_VENDOR", "DRTM_PSP", "DRTM_PCR_BANKS")
 
 
 def current() -> str | None:
     """Which configuration this session's environment is, by what
-    `DRTM_PSP` and `DRTM_PCR_BANKS` say, or `None` when it is none of
-    them, a hand-made session."""
+    `DRTM_VENDOR`, `DRTM_PSP` and `DRTM_PCR_BANKS` say, or `None` when it
+    is none of them, a hand-made session."""
+    vendor = machine.vendor()
     psp = machine.psp_mode() is not None
     banks = qemu_vm.pcr_banks()
     for name, configuration in CONFIGURATIONS.items():
         wanted = configuration.banks or ",".join(qemu_vm.PCR_BANKS)
-        if psp == configuration.psp and banks == tuple(wanted.split(",")):
+        if (
+            vendor == configuration.vendor
+            and psp == configuration.psp
+            and banks == tuple(wanted.split(","))
+        ):
             return name
     return None
 

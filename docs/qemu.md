@@ -8,9 +8,10 @@ SPDX-License-Identifier: BSD-3-Clause
 
 How to build the `drtm-txt` branch of QEMU, what the harness runs on it for
 every boot, argument by argument, what the `amd-drtm=on` machine option
-stands for, how to read the launch traces it writes to `qemu.log`, and
-what the PSP device does. `uv run tb-boot -n` prints the exact command
-for a boot by hand.
+stands for, how to read the launch traces it writes to `qemu.log`, what
+the PSP device does, and how the Intel machine `DRTM_VENDOR=intel`
+picks differs. `uv run tb-boot -n` prints the exact command for a boot
+by hand.
 
 ## Building the `drtm-txt` branch
 
@@ -396,3 +397,70 @@ Its traces, `amd_psp_*`, add about thirty lines to a launch:
     or the log handed out.
 - `amd_psp_drtm_region`: the TMR descriptors, the shared buffer or the
     IVRS copy handed out, with its address and size.
+
+## The Intel machine
+
+`DRTM_VENDOR=intel` boots the same image through an Intel TXT launch,
+`GETSEC[SENTER]`, instead. The branch emulates the chipset's TXT
+registers and SINIT's part of the launch: the measurements, the VT-d
+protected memory ranges, the TXT heap the MLE reads and the wake of the
+APs. Everything but the machine, the CPU and the traces is as above.
+
+| Argument                                 | Why                                                                                                                                                                                                                                                                                                                            |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-machine q35,smm=on,txt=on`             | The TXT register spaces, private at `0xfed20000` and public at `0xfed30000`, and `GETSEC` for a CPU with SMX. It needs a TPM, which every boot has.                                                                                                                                                                            |
+| `txt-firmware=on`                        | Leaves the platform as TXT firmware would before the OS loader runs: a locked DPR below TSEG with an SINIT ACM in its `SINIT.BASE` slot and the TXT heap with the BIOS data, `IA32_FEATURE_CONTROL` locked with SENTER enabled, and the DPR reserved in the e820 table. Neither Dasharo nor SeaBIOS does any of this for QEMU. |
+| `-device intel-iommu,intremap=on,eim=on` | VT-d, which the DPR is locked through and the launched OS turns the protected memory ranges off with. Interrupt remapping without EIM loses dom0's interrupts under Xen.                                                                                                                                                       |
+| `-cpu Skylake-Client,+smx,+monitor`      | An Intel model with SMX. MONITOR is on every TXT CPU and Linux's wake of the APs after the launch executes it, while this model leaves it out.                                                                                                                                                                                 |
+| `-m 3G`                                  | RAM above 4 GiB too, which q35 maps the part past 2 GiB to from 2.75 GiB of RAM up. With none there GRUB asks for a high protected range at address 0 with a nonzero size, which SENTER refuses, and the machine resets into the default entry without a launch. TXT itself needs 356 MiB below 4 GiB.                         |
+| `-trace txt_* -trace getsec_*`           | The TXT device's and `GETSEC`'s events.                                                                                                                                                                                                                                                                                        |
+
+There is no launch record over QMP, no strict mode and no PSP. GRUB has
+no SINIT of its own to load: it tries the SKL as one, prints `it does
+not look like SINIT ACM`, and takes the one in the `SINIT.BASE` slot.
+
+A control boot writes two lines to `qemu.log`, the firmware setup. A
+launch writes about sixty, most of them register accesses
+(`txt_reg_read`, `txt_reg_write`). The rest, from the Xen EFI launch:
+
+```text
+txt_dpr_locked TXT.DPR locked: 0x7a000041
+txt_firmware_setup txt-firmware: DPR at 0x79c00000, SINIT at 0x79e00000, heap at 0x79f00000
+getsec_senter GETSEC[SENTER]: staged measured launch
+getsec_ap_parked GETSEC[SENTER]: RLP 1 asleep
+txt_senter GETSEC[SENTER]: staged measured launch entered
+txt_acm_validated GETSEC[SENTER]: SINIT ACM accepted, size 0x8000 entry 0x1000 1 chipset ids
+txt_smi_inhibit TXT: SMI inhibition engaged by SENTER
+txt_drtm_hash_start DRTM: _TPM_Hash_Start at locality 4 over 32768 bytes
+txt_drtm_hash_done DRTM: _TPM_Hash_End done, 32768 bytes measured
+txt_drtm_digest DRTM: ACM digest sha1=aad1b648... sha256=2c1298b8...
+txt_measure_mle DRTM: MLE measured via ptab 0x7c600000 size 0x74aa20 hdr@0x2000a0
+txt_drtm_digest DRTM: MLE digest sha1=bbad5f0a... sha256=948e6a3d...
+txt_drtm_extend_pcr DRTM: TPM2_PCR_Extend(PCR 18) issued at locality 4 with 2 digests
+txt_drtm_extend_pcr DRTM: TPM2_PCR_Extend(PCR 17) issued at locality 4 with 2 digests
+txt_dmar_found sinit_mle_data: DMAR at 0x7ee00000, 104 bytes
+txt_rlp_wake_mechanism os_sinit_data capabilities 0x222, RLP wake via MONITOR
+txt_sinit_mle_data sinit_mle_data written: 3 MDRs at heap offset 0x124
+txt_event_log TPM2 Spec ID and SINIT launch events at 0x7c5e4000, 589 bytes, 2 banks
+txt_wakeup_join TXT MLE_JOIN: gdt 0x9e218 limit 0x3f cs 0x30 entry 0x9e026
+txt_wakeup_entry TXT RLP wake: entry 0x9e026 cs 0x30 gdt 0x9e218 limit 0x3f
+txt_monitor_wake TXT MONITOR wake, value 0x1
+getsec_ap_joined GETSEC[WAKEUP]: RLP 1 joined at 0x9e026
+```
+
+What to look for:
+
+- `getsec_ap_parked` and `getsec_ap_joined`: SENTER put each AP to
+    sleep, and the OS woke it through `MLE_JOIN`, here after a write to
+    the MONITOR address `txt_rlp_wake_mechanism` names. An AP that never
+    joins is missing from the OS's CPU count.
+- `txt_acm_validated`, `txt_drtm_digest` and `txt_drtm_extend_pcr`: the
+    ACM taken, then what SINIT measured and extended into PCR 17 and 18.
+    `txt_event_log` is where it logged that, the log the OS reads.
+- `txt_senter_errorcode`: a launch SENTER refused, with the
+    `TXT.ERRORCODE` it set. The machine then resets, and GRUB's default
+    entry boots without a launch.
+- `txt_reset_request`: a `TXT.CMD.RESET` write, the MLE's own TXT reset
+    after an error it reports in `TXT.ERRORCODE`.
+- `txt_reg_write_ignored`: a write the device does not implement. The
+    image's Linux writes `TXT.ESTS` in private space, which is one.

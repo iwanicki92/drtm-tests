@@ -149,13 +149,20 @@ class BootSession[T]:
         once, and in the order the tests ask for them, so the pool works on
         what is wanted first. Last of its hook, so `-k` and `-m` have
         already dropped what is not being run and its boots never start.
+        A test takes the boots its fixtures name, and those a parameter of
+        it names, for a test parametrized over boots.
         """
         if config.option.collectonly:
             return
         first_wanted: dict[str, int] = {}
         for index, item in enumerate(items):
+            callspec = getattr(item, "callspec", None)
+            params = callspec.params.values() if callspec is not None else ()
+            named = [*getattr(item, "fixturenames", ()), *params]
             taken = [
-                name for name in getattr(item, "fixturenames", ()) if name in self.names
+                name
+                for name in dict.fromkeys(n for n in named if isinstance(n, str))
+                if name in self.names
             ]
             self._entries[item.nodeid] = taken
             for name in taken:

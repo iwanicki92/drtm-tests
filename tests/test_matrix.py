@@ -40,9 +40,18 @@ def test_a_selection_of_releases_is_kept_in_the_order_given():
         ({"DRTM_PCR_BANKS": "sha1,sha256,sha384"}, "sha384"),
         ({"DRTM_PSP": "classic"}, "psp"),
         ({"DRTM_PCR_BANKS": "sha384"}, None),
+        ({"DRTM_VENDOR": "intel"}, "intel"),
+        ({"DRTM_VENDOR": "intel", "DRTM_PCR_BANKS": "sha256"}, "intel-sha256"),
+        (
+            {"DRTM_VENDOR": "intel", "DRTM_PCR_BANKS": "sha1,sha256,sha384"},
+            "intel-sha384",
+        ),
+        ({"DRTM_VENDOR": "intel", "DRTM_PSP": "on"}, None),
+        ({"DRTM_VENDOR": "amd"}, "classic"),
     ],
 )
 def test_the_environment_names_its_configuration(monkeypatch, env, expected):
+    monkeypatch.delenv("DRTM_VENDOR", raising=False)
     monkeypatch.delenv("DRTM_PSP", raising=False)
     monkeypatch.delenv("DRTM_PCR_BANKS", raising=False)
     for key, value in env.items():
@@ -51,6 +60,7 @@ def test_the_environment_names_its_configuration(monkeypatch, env, expected):
 
 
 def test_a_cell_replaces_the_configuration_variables_and_the_local_image(monkeypatch):
+    monkeypatch.setenv("DRTM_VENDOR", "intel")
     monkeypatch.setenv("DRTM_PSP", "on")
     monkeypatch.setenv("DRTM_PCR_BANKS", "sha256")
     monkeypatch.setenv("DRTM_TB_IMAGE", "/tmp/local.wic")
@@ -58,6 +68,7 @@ def test_a_cell_replaces_the_configuration_variables_and_the_local_image(monkeyp
     env = matrix.environment("v0.5.2", "classic")
     assert env["DRTM_TB_RELEASE"] == "v0.5.2"
     assert env["DRTM_QEMU_BINARY"] == "/opt/qemu"
+    assert "DRTM_VENDOR" not in env
     assert "DRTM_PSP" not in env
     assert "DRTM_PCR_BANKS" not in env
     assert "DRTM_TB_IMAGE" not in env
@@ -68,6 +79,10 @@ def test_a_cell_replaces_the_configuration_variables_and_the_local_image(monkeyp
     # never talks to the service, so the launches are expected to fail.
     assert matrix.environment("v0.5.2", "psp")["DRTM_PSP"] == "classic"
     assert matrix.environment("amd-drtm-test-image-4", "psp-sha256")["DRTM_PSP"] == "on"
+    intel = matrix.environment("v0.5.2", "intel-sha384")
+    assert intel["DRTM_VENDOR"] == "intel"
+    assert intel["DRTM_PCR_BANKS"] == "sha1,sha256,sha384"
+    assert "DRTM_PSP" not in intel
     with pytest.raises(SystemExit, match="not pinned"):
         matrix.environment("v9", "classic")
     with pytest.raises(SystemExit, match="not in drtmtest.matrix"):

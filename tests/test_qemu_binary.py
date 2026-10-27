@@ -26,14 +26,15 @@ def _fake_qemu(tmp_path: Path, stderr: str, status: int) -> str:
     return str(script)
 
 
-def test_the_configured_binary_is_ours():
-    assert machine.unsupported_binary() is None
+@pytest.mark.parametrize("vendor", machine.VENDORS)
+def test_the_configured_binary_is_ours(vendor: str):
+    assert machine.unsupported_binary(vendor) is None
 
 
 def test_a_refused_option_is_reported(tmp_path, monkeypatch: pytest.MonkeyPatch):
     error = "qemu-system-x86_64: Property 'pc-q35-10.2-machine.amd-drtm' not found"
     monkeypatch.setenv("DRTM_QEMU_BINARY", _fake_qemu(tmp_path, error, 1))
-    assert unsupported_binary(machine.PROBE_OPTIONS) == error
+    assert unsupported_binary(machine.PROBE_OPTIONS["amd"]) == error
 
 
 def test_a_warning_named_in_rejects_is_reported(
@@ -48,5 +49,5 @@ def test_a_warning_named_in_rejects_is_reported(
 
 def test_a_missing_binary_is_reported(tmp_path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("DRTM_QEMU_BINARY", str(tmp_path / "absent"))
-    reason = unsupported_binary(machine.PROBE_OPTIONS)
+    reason = unsupported_binary(machine.PROBE_OPTIONS["amd"])
     assert reason is not None and "not found" in reason

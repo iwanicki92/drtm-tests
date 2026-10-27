@@ -11,14 +11,16 @@ SPDX-License-Identifier: BSD-3-Clause
 [![v0.5.3-rc1][badge-v0.5.3-rc1]][results]
 
 Boots the [meta-trenchboot](https://github.com/zarhus/meta-trenchboot)
-image under a QEMU that runs AMD's `SKINIT`, one boot per GRUB entry, and
-checks what each launch leaves behind: the emulator's launch record, the
-TPM's PCRs, the event log that has to replay to them, and what Xen or
-Linux say about it.
+image under a QEMU that runs AMD's `SKINIT` or an Intel TXT launch, one
+boot per GRUB entry, and checks what each launch leaves behind: the
+emulator's launch record, the TPM's PCRs, the event log that has to
+replay to them, the CPUs the OS brought up, and what Xen or Linux say
+about it.
 
-Upstream QEMU raises `#UD` on `SKINIT`. The [`drtm-txt` branch][qemu-fork] of
-our QEMU fork adds the launch machine, `-machine q35,amd-drtm=on`, and
-this suite needs that build. Point `DRTM_QEMU_BINARY` at it.
+Upstream QEMU raises `#UD` on `SKINIT` and has no TXT. The
+[`drtm-txt` branch][qemu-fork] of our QEMU fork adds both launch
+machines, `-machine q35,amd-drtm=on` and `-machine q35,txt=on`, and this
+suite needs that build. Point `DRTM_QEMU_BINARY` at it.
 
 ## Requirements
 
@@ -58,7 +60,8 @@ writes its logs to a numbered directory under `logs/`.
 | `DRTM_QEMU_BINARY` | none, required          | The `drtm-txt` branch's `qemu-system-x86_64`.                                                                 |
 | `DRTM_TB_RELEASE`  | `amd-drtm-test-image-4` | Image release to boot, a tag pinned in `drtmtest/trenchboot.py`.                                              |
 | `DRTM_TB_IMAGE`    | unset                   | A local `.wic` to boot instead, read in place. No entry is expected broken on it. Excludes `DRTM_TB_RELEASE`. |
-| `DRTM_PSP`         | `off`                   | Adds the PSP DRTM service, see below.                                                                         |
+| `DRTM_VENDOR`      | `amd`                   | `intel` boots the Intel TXT machine instead of AMD's.                                                         |
+| `DRTM_PSP`         | `off`                   | Adds the PSP DRTM service, see below. AMD only.                                                               |
 | `DRTM_PCR_BANKS`   | `sha1,sha256`           | PCR banks active in every boot's TPM.                                                                         |
 | `DRTM_QEMU_ARGS`   | unset                   | Words appended to every QEMU command line, so what they repeat wins. `tb-boot` takes the same after `--`.     |
 | `DRTM_QEMU_ACCEL`  | `tcg`                   | `kvm` boots the normal entries faster and cannot run the launches.                                            |

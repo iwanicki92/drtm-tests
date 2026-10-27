@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""The Xen entries: a launch through SKINIT on the EFI path under Dasharo,
+"""The Xen entries: a launch on the EFI path under Dasharo,
 its control boot without one, and the MB2 launch under SeaBIOS."""
 
 import hashlib
@@ -15,6 +15,7 @@ from conftest import (
     PCR_ONES,
     PCR_ZERO,
     PSP,
+    VENDOR,
     Boot,
     expects_boot,
     expects_open_localities,
@@ -29,9 +30,20 @@ from drtmtest.eventlog import EV_SLAUNCH, Event, banks, replay
 # carries the TCG placeholder, though the launch measured the SLB there.
 SKL_HASHES = ("sha1", "sha256")
 
-# What Xen prints while taking over from the loader, on hardware and here.
+# What Xen prints while taking over from the loader, on hardware and here:
+# the event log, then what the vendor's launch left in memory.
 XEN_RESERVES_EVENT_LOG = "SLAUNCH: reserving event log"
-XEN_RESERVES_SLB = "SLAUNCH: reserving SLB"
+XEN_RESERVES = {
+    "amd": ("SLAUNCH: reserving SLB",),
+    "intel": ("SLAUNCH: reserving TXT heap", "SLAUNCH: reserving SINIT memory"),
+}
+
+# The IOMMU a launched Linux registers, AMD's IVHD or Intel's DMAR unit.
+LINUX_IOMMU = {"amd": "ivhd0", "intel": "dmar0"}
+
+# Xen's direct I/O capability. TCG has no VMX, so on Intel Xen runs no HVM
+# guests and reports direct I/O for PV ones alone.
+XEN_DIRECTIO = {"amd": "hvm_directio", "intel": "pv_directio"}
 
 # What Xen's PSP driver prints: the launch it found the service made, and
 # the TMR it releases once its IOMMU is programmed.
@@ -84,7 +96,8 @@ def assert_seen_by_xen(boot: Boot) -> None:
     """Xen's own view of the launch, and of the service when it is there:
     the PSP driver reports the launch and releases the TMR."""
     assert XEN_RESERVES_EVENT_LOG in boot.xen_lines, boot.xen_lines
-    assert XEN_RESERVES_SLB in boot.xen_lines, boot.xen_lines
+    for line in XEN_RESERVES[VENDOR]:
+        assert line in boot.xen_lines, boot.xen_lines
     if PSP is None:
         assert XEN_PSP_LAUNCH not in boot.xen_lines, boot.xen_lines
         return
@@ -133,23 +146,26 @@ def assert_log_declares_the_tpms_banks(boot: Boot) -> None:
 
 def assert_iommu_up(boot: Boot) -> None:
     """The launched OS brought the IOMMU up: Xen reports direct I/O among
-    its capabilities, Linux has the AMD IOMMU registered and devices in
-    its groups."""
+    its capabilities, Linux has the vendor's IOMMU registered and devices
+    in its groups."""
     if boot.entry.os == "xen":
-        assert "hvm_directio" in boot.iommu, boot.iommu
+        assert XEN_DIRECTIO[VENDOR] in boot.iommu.split(), boot.iommu
     else:
-        assert "ivhd0" in boot.iommu, boot.iommu
+        assert LINUX_IOMMU[VENDOR] in boot.iommu, boot.iommu
         assert re.search(r"iommu_groups:\n\s*\d", boot.iommu), boot.iommu
 
 
 def assert_not_launched(boot: Boot) -> None:
-    """Without a launch the DRTM PCRs stay as the TPM started them."""
-    assert boot.record["launched"] is False
+    """Without a launch the DRTM PCRs stay as the TPM started them, and
+    on AMD the platform recorded none."""
+    if VENDOR == "amd":
+        assert boot.record["launched"] is False
     for index in range(17, 23):
         assert boot.pcrs[index] == PCR_ONES, boot.pcrs
 
 
 @expects_boot("xen_efi_launch")
+@pytest.mark.amd_only
 @expects_open_localities()
 def test_efi_launch_is_recorded_by_the_platform(xen_efi_launch: Boot):
     assert_launched(xen_efi_launch)
@@ -167,6 +183,7 @@ def test_efi_launch_brings_the_iommu_up(xen_efi_launch: Boot):
 
 
 @expects_boot("xen_efi_launch")
+@pytest.mark.amd_only
 @expects_open_localities()
 def test_efi_launch_log_replays_to_the_pcrs(xen_efi_launch: Boot):
     assert_log_replays(xen_efi_launch)
@@ -204,6 +221,7 @@ def test_efi_normal_boot_launches_nothing(xen_efi: Boot):
 
 
 @expects_boot("xen_mb2_launch")
+@pytest.mark.amd_only
 @expects_open_localities()
 def test_mb2_launch_is_recorded_by_the_platform(xen_mb2_launch: Boot):
     assert_launched(xen_mb2_launch)
@@ -221,6 +239,7 @@ def test_mb2_launch_brings_the_iommu_up(xen_mb2_launch: Boot):
 
 
 @expects_boot("xen_mb2_launch")
+@pytest.mark.amd_only
 @expects_open_localities()
 @expects_xens_mbi_digest()
 def test_mb2_launch_log_replays_to_the_pcrs(xen_mb2_launch: Boot):

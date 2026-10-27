@@ -82,7 +82,7 @@ RC = [
 
 
 def _row(page: str, section: str, label: str) -> list[str]:
-    body = page.split(f"## {section}")[1].split("## ", 1)[0]
+    body = page.split(f"### {section}\n")[1].split("## ", 1)[0]
     for line in body.splitlines():
         if line.startswith(f"| `{label}`"):
             return [cell.strip() for cell in line.strip("|").split("|")][1:]
@@ -116,7 +116,7 @@ def test_the_notes_say_what_was_expected(results: list[dict]):
 
 def test_a_release_without_results_is_a_missing_column(results: list[dict]):
     page, _ = render(results)
-    psp = page.split("## With PSP DRTM service, TPM with SHA-1 and SHA-256")[1]
+    psp = page.split("### With PSP DRTM service, TPM with SHA-1 and SHA-256")[1]
     header = psp.strip().splitlines()[0]
     assert [c.strip() for c in header.strip("|").split("|")] == [
         "Entry",
@@ -145,8 +145,8 @@ def test_the_full_table_has_every_test_and_the_parser_ones_only_there(
 
 def test_the_sections_and_columns_follow_the_matrix_order(results: list[dict]):
     page, badges = render(list(reversed(results)))
-    assert page.index("## Without PSP, TPM with SHA-1 and SHA-256") < page.index(
-        "## With PSP DRTM service, TPM with SHA-1 and SHA-256"
+    assert page.index("### Without PSP, TPM with SHA-1 and SHA-256") < page.index(
+        "### With PSP DRTM service, TPM with SHA-1 and SHA-256"
     )
     assert list(badges) == ["amd-drtm-test-image-4", "v0.5.2", "v0.5.3-rc1"]
 
@@ -201,7 +201,31 @@ def test_a_hand_made_session_gets_a_section_of_its_own():
     result = _result("v0.5.2", None, ALL_GOOD)
     result["details"]["banks"] = ["sha256", "sha384"]
     page, _ = render([result])
-    assert "## psp=off, banks=sha256,sha384" in page
+    assert "## AMD SKINIT\n\n### psp=off, banks=sha256,sha384\n" in page
+
+
+def test_the_sections_are_grouped_by_vendor_amd_first(results: list[dict]):
+    intel = _result("v0.5.2", "intel", ALL_GOOD)
+    custom = _result("v0.5.2", None, ALL_GOOD)
+    custom["details"]["vendor"] = "intel"
+    page, badges = render([intel, custom, _result("v0.5.2", None, ALL_GOOD), *results])
+    headings = [line for line in page.splitlines() if line.startswith("#")]
+    assert headings == [
+        "# Boot matrix results",
+        "## AMD SKINIT",
+        "### Without PSP, TPM with SHA-1 and SHA-256",
+        "### With PSP DRTM service, TPM with SHA-1 and SHA-256",
+        "### psp=off, banks=sha1,sha256",
+        "## Intel TXT",
+        "### TPM with SHA-1 and SHA-256",
+        "### psp=off, banks=sha1,sha256",
+    ]
+    assert _row(page, "TPM with SHA-1 and SHA-256", "xen_efi_launch") == [
+        NONE,
+        PASS,
+        NONE,
+    ]
+    assert badges["v0.5.2"]["message"] == "1 failed"
 
 
 def test_main_reads_a_tree_of_results_and_writes_the_page_and_badges(

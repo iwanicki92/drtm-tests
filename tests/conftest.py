@@ -33,9 +33,13 @@ LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
 # host. Boots overlap, so the allowance is for a full batch of them.
 BOOT_TIMEOUT = 420.0
 
-# Each guest's memory, matched to -m in drtmtest.machine. dom0 boots in it,
-# and it is what lets six boots share a 16 GB host.
-GUEST_MEM_GIB = 2
+# Which vendor's machine every boot runs on, "amd" or "intel".
+VENDOR = machine.vendor()
+
+# Each guest's memory, the -m drtmtest.machine gives the vendor's machine.
+# dom0 boots in it, and on AMD it is what lets six boots share a 16 GB
+# host.
+GUEST_MEM_GIB = int(machine.memory(VENDOR).removesuffix("G"))
 
 # Everything a boot takes from the environment is read here, at import on
 # the main thread, and handed to the boot, the environment its processes
@@ -69,9 +73,10 @@ def _image() -> Path:
 
 # The upstream releases' SKL declares SHA-1 and SHA-256 in its log
 # whatever the TPM has, and their Xen's legacy path copies the multiboot
-# information's digests for those two banks alone.
-OTHER_BANKS = trenchboot.upstream() and BANKS != qemu_vm.PCR_BANKS
-MORE_BANKS = trenchboot.upstream() and bool(set(BANKS) - set(qemu_vm.PCR_BANKS))
+# information's digests for those two banks alone. Neither runs on Intel.
+_SKL = VENDOR == "amd" and trenchboot.upstream()
+OTHER_BANKS = _SKL and BANKS != qemu_vm.PCR_BANKS
+MORE_BANKS = _SKL and bool(set(BANKS) - set(qemu_vm.PCR_BANKS))
 
 
 # An AMD Secure Processor device ID that GRUB, the SKL and Xen all list
@@ -83,17 +88,21 @@ NO_PSP_DEVICE_ID = 0x1537
 class Entry:
     """One GRUB entry: its title, which OS it boots, whether through a
     launch, and under which firmware. `broken` names why it is not expected
-    to boot on the upstream releases. An entry with a `parameter` or a
-    `prelude` is not picked from the menu but typed at GRUB's shell: the
-    prelude's commands, then the titled entry's, read off the image, with
-    the parameter on the kernel's line, so every image has it.
-    `devices` are QEMU arguments this entry's machine gets as well."""
+    to boot on the upstream releases under AMD, `intel_broken` under
+    Intel, and an `amd_only` entry is not booted on Intel. An entry with
+    a `parameter` or a `prelude` is not picked from the menu but typed at
+    GRUB's shell: the prelude's commands, then the titled entry's, read
+    off the image, with the parameter on the kernel's line, so every image
+    has it. `devices` are QEMU arguments this entry's machine gets as
+    well."""
 
     title: str
     os: str
     launch: bool
     firmware: str = "dasharo"
     broken: str | None = None
+    intel_broken: str | None = None
+    amd_only: bool = False
     parameter: str | None = None
     prelude: tuple[str, ...] = ()
     devices: tuple[str, ...] = ()
@@ -119,6 +128,8 @@ class Entry:
             return (
                 "the image has no legacy boot code, its wic carries the EFI boot alone"
             )
+        if VENDOR == "intel":
+            return self.intel_broken if trenchboot.upstream() else None
         if PSP == "classic" and self.launch and self.os == "linux":
             return (
                 "classic SKL: the kernel's extend fails at a locked locality, it panics"
@@ -133,6 +144,8 @@ class Entry:
     def banner(self) -> str:
         return XEN_BANNER if self.os == "xen" else LINUX_BANNER
 
+
+_NO_INTEL_IOMMU = "no CONFIG_INTEL_IOMMU: the VT-d PMRs stay on and block the disk"
 
 ENTRIES: dict[str, Entry] = {
     "xen_efi_launch": Entry("Boot Xen with TrenchBoot (EFI)", "xen", True),
@@ -153,9 +166,14 @@ ENTRIES: dict[str, Entry] = {
         "linux",
         True,
         broken="panics in check_timer: SKL entered startup_32, GIF never set",
+        intel_broken="the decompressor wipes boot_params the EFI stub placed there",
     ),
     "linux_legacy_launch": Entry(
-        "Boot Linux with TrenchBoot", "linux", True, firmware="seabios"
+        "Boot Linux with TrenchBoot",
+        "linux",
+        True,
+        firmware="seabios",
+        intel_broken=_NO_INTEL_IOMMU,
     ),
     # The legacy Linux launch with one more kernel parameter, typed at
     # GRUB's shell. The SKL measures the command line into PCR 18, so this
@@ -166,6 +184,7 @@ ENTRIES: dict[str, Entry] = {
         True,
         firmware="seabios",
         parameter="drtmtest=alt",
+        intel_broken=_NO_INTEL_IOMMU,
     ),
     # The Xen EFI launch typed after `set debug=slaunch`. A device GRUB's
     # PSP table lists without one makes GRUB print after Xen exits the boot
@@ -174,6 +193,7 @@ ENTRIES: dict[str, Entry] = {
         "Boot Xen with TrenchBoot (EFI)",
         "xen",
         True,
+        amd_only=True,
         broken=(
             "GRUB's debug print after exit_boot_services goes to the EFI console"
             if PSP is None
@@ -208,7 +228,9 @@ class Boot:
     booted, the header's length worth of it, what SKINIT measures, and
     `slb_length` that length, all gathered on launches only. `iommu` is
     what the OS says of its IOMMU: Xen's `virt_caps`, or the kernel's
-    iommu class and groups. `cmdline` is Linux's `/proc/cmdline`.
+    iommu class and groups. `cmdline` is Linux's `/proc/cmdline`. The
+    launch record and the SLB are AMD's and stay empty on Intel. `smp` is
+    the CPUs the machine had, `qemu_log` what QEMU logged by the end.
     """
 
     entry: Entry
@@ -226,6 +248,8 @@ class Boot:
     slb_length: int = 0
     iommu: str = ""
     cmdline: str = ""
+    smp: int = 0
+    qemu_log: str = ""
     error: Exception | None = None
 
     @property
@@ -260,7 +284,7 @@ def _warmed_firmware() -> Path:
         log_dir = SESSION.run_log_dir() / "boot-warm-firmware"
         with QemuVm(
             log_dir,
-            machine.options(_image(), extra=EXTRA_ARGS),
+            machine.options(_image(), extra=EXTRA_ARGS, vendor=VENDOR),
             firmware=FIRMWARE.fetch(trenchboot.CACHE_DIR),
             tpm="tis",
             save_firmware_to=scratch,
@@ -321,17 +345,36 @@ def _slb(console: Console) -> tuple[int, bytes]:
         raise RuntimeError(f"the SLB dump is not hex: {out[:200]!r}") from None
 
 
+def _smp(args: list[str]) -> int:
+    """The CPU count of the last `-smp` in a command line, which QEMU
+    takes: `-smp 2`, `cpus=2,...`, or the topology's product without it."""
+    value = [args[i + 1] for i, arg in enumerate(args[:-1]) if arg == "-smp"][-1]
+    count = 1
+    for item in value.split(","):
+        key, _, number = item.rpartition("=")
+        if key in ("", "cpus"):
+            return int(number)
+        if key != "maxcpus":
+            count *= int(number)
+    return count
+
+
 def _boot(name: str, log_dir: Path) -> Boot:
     entry = ENTRIES[name]
     boot = Boot(entry, log_dir)
     dasharo = entry.firmware == "dasharo"
     xen = entry.os == "xen"
+    args = machine.options(
+        _image(),
+        psp=PSP is not None,
+        extra=[*entry.devices, *EXTRA_ARGS],
+        vendor=VENDOR,
+    )
+    boot.smp = _smp(args)
     try:
         with QemuVm(
             log_dir,
-            machine.options(
-                _image(), psp=PSP is not None, extra=[*entry.devices, *EXTRA_ARGS]
-            ),
+            args,
             firmware=_warmed_firmware() if dasharo else None,
             tpm="tis",
             settings=SETTINGS,
@@ -353,8 +396,9 @@ def _boot(name: str, log_dir: Path) -> Boot:
             # The kernel's console messages otherwise land in the middle
             # of a command's output, a 64 KiB hex dump among them.
             console.run("dmesg -n 1")
-            assert vm.qmp is not None
-            boot.record = vm.qmp.execute("query-amd-drtm")
+            if VENDOR == "amd":
+                assert vm.qmp is not None
+                boot.record = vm.qmp.execute("query-amd-drtm")
             boot.pcrs = console.pcrs(list(range(17, 23)))
             boot.bank_pcrs = {
                 bank: console.pcrs(list(range(17, 23)), bank)
@@ -372,8 +416,10 @@ def _boot(name: str, log_dir: Path) -> Boot:
             boot.securityfs = console.run("ls /sys/kernel/security/slaunch 2>&1")
             if entry.launch:
                 boot.eventlog = _event_log(console, entry, vm.capture)
-                boot.slb_length, boot.slb = _slb(console)
+                if VENDOR == "amd":
+                    boot.slb_length, boot.slb = _slb(console)
             boot.console = vm.capture
+        boot.qemu_log = (log_dir / "qemu.log").read_text(errors="replace")
     except Exception as e:
         if entry.broken_reason is None:
             raise
@@ -406,9 +452,13 @@ def _prepare(names: list[str]) -> None:
 
 
 def _check() -> str | None:
-    reason = machine.unsupported_binary()
+    if VENDOR == "intel" and PSP is not None:
+        return "DRTM_PSP adds AMD's Secure Processor, unset it for DRTM_VENDOR=intel"
+    reason = machine.unsupported_binary(VENDOR)
     if reason is not None:
-        return f"This suite needs the QEMU drtm branch, see docs/testing.md: {reason}"
+        return (
+            f"This suite needs the QEMU drtm-txt branch, see docs/testing.md: {reason}"
+        )
     if shutil.which("mtype") is None:
         return "This suite needs mtools on PATH, it reads grub.cfg off the image"
     return None
@@ -434,6 +484,7 @@ def _details() -> dict:
         "release": trenchboot.release(),
         "image": trenchboot.description(),
         "configuration": matrix.current(),
+        "vendor": VENDOR,
         "psp": PSP,
         "banks": list(BANKS),
         "qemu": _first_line(str(qemu), "--version"),
@@ -456,6 +507,7 @@ SESSION = BootSession(
     check=_check,
     header=lambda: [
         f"image:       {trenchboot.description()}",
+        f"vendor:      {VENDOR}",
         f"psp:         {PSP or 'off'}",
         f"banks:       {','.join(BANKS)}",
     ],
@@ -464,7 +516,30 @@ SESSION = BootSession(
 
 
 def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers", "amd_only: a test on what only AMD's launch leaves, not run on Intel"
+    )
     config.pluginmanager.register(SESSION)
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Drops what Intel does not run: the AMD-only tests and every test on
+    an AMD-only entry. Ahead of the session's own hook, so their boots
+    never start."""
+    if VENDOR == "amd":
+        return
+    amd_only = {name for name, entry in ENTRIES.items() if entry.amd_only}
+    dropped = [
+        item
+        for item in items
+        if item.get_closest_marker("amd_only")
+        or amd_only & set(getattr(item, "fixturenames", ()))
+    ]
+    if dropped:
+        config.hook.pytest_deselected(items=dropped)
+        items[:] = [item for item in items if item not in dropped]
 
 
 def _entry_fixture(name: str):
@@ -497,6 +572,21 @@ def expects_boot(name: str):
     pass."""
     reason = ENTRIES[name].broken_reason
     return pytest.mark.xfail(reason is not None, reason=reason or "", strict=True)
+
+
+def expects_every_cpu(name: str):
+    """Marks what a launch's APs leave: on Intel the upstream releases'
+    Xen gives `MLE_JOIN` the GDT's base as its limit, which SENTER's wake
+    refuses, so Xen goes on without its APs and the test must fail."""
+    entry = ENTRIES[name]
+    return pytest.mark.xfail(
+        VENDOR == "intel"
+        and trenchboot.upstream()
+        and entry.os == "xen"
+        and entry.launch,
+        reason="the upstream Xen's MLE_JOIN has the GDT base as its limit",
+        strict=True,
+    )
 
 
 def expects_open_localities():

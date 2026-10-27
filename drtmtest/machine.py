@@ -2,8 +2,9 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""The AMD launch machine every boot of the image runs on, as QEMU options.
-`docs/qemu.md` explains each one.
+"""The launch machine every boot of the image runs on, as QEMU options: AMD's
+with `SKINIT` or Intel's with TXT, as `DRTM_VENDOR` picks. `docs/qemu.md`
+explains each option.
 """
 
 import os
@@ -13,11 +14,26 @@ from pathlib import Path
 
 from drtmtest import qemu_vm
 
+VENDORS = ("amd", "intel")
+
 # A model with the SKINIT feature. Under `amd-drtm=on` the machine turns
 # the feature on for any model, but Genoa is what the image was built for.
 DEFAULT_CPU = "EPYC-Genoa"
 DEFAULT_SMP = 2
 DEFAULT_MEM = "2G"
+
+# A model with SMX, and MONITOR, which every TXT CPU has and Linux's AP
+# wake after the launch executes.
+INTEL_CPU = "Skylake-Client,+smx,+monitor"
+
+# RAM above 4 GiB too: with none there GRUB asks for a high PMR at 0 with
+# a nonzero size, which SENTER refuses. q35 keeps 2 GiB low and maps the
+# rest above 4 GiB from 2.75 GiB up.
+INTEL_MEM = "3G"
+
+# VT-d, which TXT locks the DPR through and the OS turns the PMRs off
+# with. Xen's dom0 loses interrupts under remapping without EIM.
+INTEL_IOMMU = "intel-iommu,intremap=on,eim=on"
 
 # What the launch devices log when asked to, into qemu.log.
 LAUNCH_TRACES = (
@@ -31,13 +47,32 @@ LAUNCH_TRACES = (
     "x86_init_redirected",
 )
 
-# What the probe at session start asks for. Upstream refuses the option.
-PROBE_OPTIONS = ["-machine", "q35,amd-drtm=on"]
+INTEL_TRACES = ("txt_*", "getsec_*")
+
+# What the probe at session start asks for. Upstream refuses the options.
+PROBE_OPTIONS = {
+    "amd": ["-machine", "q35,amd-drtm=on"],
+    "intel": ["-machine", "q35,txt-firmware=off"],
+}
 
 # The Secure Processor with its DRTM service behind the mailbox, which the
 # shorthand does not add. GRUB, SKL and Xen find it through the SMN pair
 # on the host bridge and take the PSP-assisted launch path.
 PSP_DEVICE = "amd-psp,drtm-service=on"
+
+
+def vendor() -> str:
+    """What `DRTM_VENDOR` asks for: `amd`, the default, launches through
+    `SKINIT`, `intel` through TXT's `GETSEC[SENTER]`."""
+    value = os.environ.get("DRTM_VENDOR", "").strip().lower() or "amd"
+    if value not in VENDORS:
+        raise RuntimeError(f"DRTM_VENDOR={value!r} is not amd or intel")
+    return value
+
+
+def memory(vendor: str) -> str:
+    """The guest memory a vendor's machine gets by default."""
+    return INTEL_MEM if vendor == "intel" else DEFAULT_MEM
 
 
 def psp_mode() -> str | None:
@@ -60,40 +95,60 @@ def extra_args() -> list[str]:
     return shlex.split(os.environ.get("DRTM_QEMU_ARGS", ""))
 
 
-def unsupported_binary() -> str | None:
-    """Why the QEMU in use cannot boot this image, or `None` if it can."""
-    return qemu_vm.unsupported_binary(PROBE_OPTIONS)
+def unsupported_binary(vendor: str = "amd") -> str | None:
+    """Why the QEMU in use cannot boot this image on a vendor's machine,
+    or `None` if it can."""
+    return qemu_vm.unsupported_binary(PROBE_OPTIONS[vendor])
 
 
 def options(
     image: Path,
-    cpu: str = DEFAULT_CPU,
+    cpu: str | None = None,
     smp: int = DEFAULT_SMP,
-    mem: str = DEFAULT_MEM,
+    mem: str | None = None,
     strict: bool = True,
     snapshot: bool = True,
     psp: bool = False,
     extra: Sequence[str] | None = None,
+    vendor: str = "amd",
 ) -> list[str]:
     """The machine and the image, without the flash, the TPM or the console.
 
-    `strict` makes the platform device stop the VM on a broken launch rule,
-    so a wrong launch is a panic the harness sees rather than a line in
-    the log. `psp` adds the Secure Processor with its DRTM service.
-    `extra` comes last, what `extra_args()` reads from `DRTM_QEMU_ARGS`
-    when `None`: a caller on a boot's thread passes what it read up front.
+    `vendor` picks AMD's machine or Intel's, and with it the default `cpu`
+    and `mem`. On AMD `strict` makes the platform device stop the VM on a
+    broken launch rule, so a wrong launch is a panic the harness sees
+    rather than a line in the log, and `psp` adds the Secure Processor
+    with its DRTM service. `extra` comes last, what `extra_args()` reads
+    from `DRTM_QEMU_ARGS` when `None`: a caller on a boot's thread passes
+    what it read up front.
     """
-    args = [
-        "-machine",
-        "q35,smm=on,amd-drtm=on",
-        "-cpu",
-        cpu,
+    if vendor == "intel":
+        if psp:
+            raise ValueError("the PSP is AMD's, the Intel machine has none")
+        args = [
+            "-machine",
+            "q35,smm=on,txt=on,txt-firmware=on",
+            "-device",
+            INTEL_IOMMU,
+            "-cpu",
+            cpu or INTEL_CPU,
+        ]
+        traces = INTEL_TRACES
+    else:
+        args = [
+            "-machine",
+            "q35,smm=on,amd-drtm=on",
+            "-cpu",
+            cpu or DEFAULT_CPU,
+            "-global",
+            f"amd-drtm-platform.strict={'on' if strict else 'off'}",
+        ]
+        traces = LAUNCH_TRACES
+    args += [
         "-smp",
         str(smp),
         "-m",
-        mem,
-        "-global",
-        f"amd-drtm-platform.strict={'on' if strict else 'off'}",
+        mem or memory(vendor),
         "-drive",
         f"file={image},format=raw,if=none,id=hd,snapshot={'on' if snapshot else 'off'}",
         "-device",
@@ -107,6 +162,6 @@ def options(
     ]
     if psp:
         args += ["-device", PSP_DEVICE]
-    for trace in LAUNCH_TRACES:
+    for trace in traces:
         args += ["-trace", trace]
     return args + (list(extra) if extra is not None else extra_args())

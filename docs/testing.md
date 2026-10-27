@@ -15,8 +15,9 @@ uv run pytest -k xen_efi      # one entry's tests, and only its boot
 uv run pytest --collect-only  # what would run, booting nothing
 ```
 
-The session refuses a QEMU that rejects `-machine q35,amd-drtm=on`
-before booting anything. `DRTM_QEMU_ACCEL=kvm` switches to KVM, which
+The session refuses a QEMU that rejects `-machine q35,amd-drtm=on`, or
+`q35,txt-firmware=off` under `DRTM_VENDOR=intel`, before booting
+anything. `DRTM_QEMU_ACCEL=kvm` switches to KVM, which
 boots the normal entries faster and cannot run the launches.
 
 Only the boots the collected tests need are started, and they start at
@@ -29,7 +30,8 @@ The image's GRUB menu lists six entries and the suite adds two,
 `linux_alt_launch` and `xen_efi_debug_launch`. Each has a fixture of the
 same name in `tests/conftest.py`, and a test takes the fixture of the
 boot it asserts on. Only entries a test names are booted, so a full run
-boots seven of them, all but `xen_mb2`, which only serves the menu check. The Linux
+boots all but `xen_mb2`, which only serves the menu check: eight on AMD
+and seven on Intel, where `xen_efi_debug_launch` is AMD only. The Linux
 control catches a QEMU configuration whose IOMMU passes DMA through
 instead of translating it, `dma-remap=on` missing for instance: a Linux
 booted directly then cannot find its disk, while Xen's dom0 boots
@@ -93,9 +95,10 @@ The tests of an entry the session is known not to boot are strict
 expected failures: they must fail, and a pass is reported as a failure
 so the change is noticed and the expectation removed.
 `Entry.broken_reason` in `tests/conftest.py` decides, from the release,
-the image and `DRTM_PSP`. An image whose wic carries the EFI boot alone,
-with a stub in its master boot record, has its SeaBIOS entries expected
-broken.
+the image, `DRTM_VENDOR` and `DRTM_PSP`. The table above is AMD's,
+[On Intel](#on-intel) has Intel's. An image whose wic carries the EFI
+boot alone, with a stub in its master boot record, has its SeaBIOS
+entries expected broken.
 
 ### Under the PSP
 
@@ -151,15 +154,69 @@ Neither is a session default. The memory is what lets six boots share
 a 16 GB host, and a machine without an 8254 would change every boot for
 the sake of one failure.
 
+## On Intel
+
+`DRTM_VENDOR=intel` boots every entry on the Intel machine
+[the QEMU doc describes](qemu.md#the-intel-machine), through
+`GETSEC[SENTER]` with the ACM the firmware left. GRUB launches the same
+entries there. `xen_efi_debug_launch` is left out, since its device is
+AMD's, and so are the tests that read what only AMD's launch leaves: the
+platform's record and the log replay, which opens with `SKINIT`'s
+measurement of the SLB. The rest run with the vendor's own lines: Linux
+prints `Intel TXT setup complete`, Xen reserves the TXT heap and the
+SINIT memory instead of the SLB, Linux registers `dmar0`, and Xen
+reports `pv_directio`, since TCG has no VMX and Xen then runs no HVM
+guests. The PSP configurations have no Intel counterpart.
+
+On the upstream releases, under Intel:
+
+| Fixture               | Upstream releases                                                           |
+|-----------------------|-----------------------------------------------------------------------------|
+| `xen_efi_launch`      | launches, Xen brings up no AP                                               |
+| `xen_mb2_launch`      | launches, Xen brings up no AP                                               |
+| `linux_launch`        | hangs: the decompressor wipes `boot_params`, which the EFI stub put there   |
+| `linux_legacy_launch` | hangs: no `CONFIG_INTEL_IOMMU`, the VT-d PMRs block the disk                |
+| `linux_alt_launch`    | hangs: no `CONFIG_INTEL_IOMMU`, the VT-d PMRs block the disk                |
+
+Their Xen gives `MLE_JOIN` the GDT's base as its limit, which the wake
+of the APs refuses with `txt_wakeup_rejected`, so it boots on one CPU
+and both of its launches are expected to fail the CPU count and the
+error check. The fork's release launches and boots every entry with
+every CPU.
+
+## What every launch leaves
+
+`tests/test_launch.py` holds what every launch must leave on either
+vendor, parametrized over the entries:
+
+- The launch reached the shell with PCR 17 and 18 extended, neither
+    zero nor all ones, in every bank. A launch that fails resets the
+    machine on Intel, and the default entry then boots without one,
+    which leaves them all ones.
+- The OS brought up as many CPUs as `-smp` gave the machine, as Xen
+    prints it (`Brought up 2 CPUs`) or Linux (`smp: Brought up 1 node,
+    2 CPUs`). The launch puts the APs to sleep and only the OS wakes
+    them.
+- No unexpected error on any boot, launch or not: no kernel or Xen
+    panic, no GRUB `error:` line but the ones the image is known to
+    print, and no line in `qemu.log` that is QEMU's guest error rather
+    than one of the session's traces, or a trace of a launch gone wrong:
+    an SENTER error code, a TXT reset, a TPM error, a refused AP wake,
+    a guest error under AMD's rules or a failed PSP launch. On Intel
+    GRUB tries the SKL as SINIT ACM, and on the upstream releases every
+    ACM they ship for real chipsets, before it takes the firmware's, and
+    says so. The upstream releases load those ACMs on AMD too, and GRUB
+    says each is not an SKL.
+
 ## What a boot gathers
 
 Once the shell answers, before the VM is torn down:
 
-- `query-amd-drtm` over QMP: `launched`, the hash verdict, the SLB length,
-    whether SL_DEV is still held and which DMA blocks remain, and with the
-    service its `psp` record: whether it was kicked, what its `LAUNCH`
-    decided, what it found of the SKL's signature, and the last command
-    with its status.
+- On AMD, `query-amd-drtm` over QMP: `launched`, the hash verdict, the
+    SLB length, whether SL_DEV is still held and which DMA blocks remain,
+    and with the service its `psp` record: whether it was kicked, what
+    its `LAUNCH` decided, what it found of the SKL's signature, and the
+    last command with its status.
 - PCRs 17 to 22 from `tpm2_pcrread`, in SHA-256 and then in every bank
     the TPM has, as `tpm2_getcap pcrs` lists them.
 - Xen's `slaunch` and `drtm` lines from `xl dmesg`, the same from `dmesg`,
@@ -171,7 +228,7 @@ Once the shell answers, before the VM is torn down:
     console: Linux exposes it at `/sys/kernel/security/slaunch/eventlog`,
     and under Xen dom0 reads the range Xen's "reserving event log" line
     names out of `/dev/mem`.
-- On a launch, the bytes `SKINIT` measured: the start of the SKL the
+- On an AMD launch, the bytes `SKINIT` measured: the start of the SKL the
     boot ran (`/boot/skl.bin`, or `/boot/skl-amdsl.bin` under the
     service), up to the length its header gives, dumped as hex the same
     way. The harness hashes them itself to check the log's `SKINIT`
@@ -180,7 +237,9 @@ Once the shell answers, before the VM is torn down:
 - The whole console capture. The Xen tests read the hypervisor's lines
     off it, the ones tagged `(XEN)`, rather than off `xl dmesg`: the
     console ring is small and a verbose boot pushes the early lines out
-    of it, while the serial output keeps them.
+    of it, while the serial output keeps them. The CPU count and the
+    errors come from it too.
+- `qemu.log` once QEMU has exited, for its guest errors.
 
 ## The event log
 
@@ -298,13 +357,16 @@ pinned release under every configuration, one job each. A
 configuration is the environment a session boots with, from
 `drtmtest/matrix.py`:
 
-| Name         | Environment                             | What it exercises                                 |
-|--------------|-----------------------------------------|---------------------------------------------------|
-| `classic`    | none                                    | Without PSP, TPM with SHA-1 and SHA-256           |
-| `psp`        | `DRTM_PSP=on`                           | With PSP DRTM service, TPM with SHA-1 and SHA-256 |
-| `sha256`     | `DRTM_PCR_BANKS=sha256`                 | Without PSP, TPM with SHA-256 alone               |
-| `psp-sha256` | `DRTM_PSP=on`, `DRTM_PCR_BANKS=sha256`  | With PSP DRTM service, TPM with SHA-256 alone     |
-| `sha384`     | `DRTM_PCR_BANKS=sha1,sha256,sha384`     | Without PSP, TPM with SHA-1, SHA-256 and SHA-384  |
+| Name           | Environment                                              | What it exercises                                 |
+|----------------|----------------------------------------------------------|---------------------------------------------------|
+| `classic`      | none                                                     | Without PSP, TPM with SHA-1 and SHA-256           |
+| `psp`          | `DRTM_PSP=on`                                            | With PSP DRTM service, TPM with SHA-1 and SHA-256 |
+| `sha256`       | `DRTM_PCR_BANKS=sha256`                                  | Without PSP, TPM with SHA-256 alone               |
+| `psp-sha256`   | `DRTM_PSP=on`, `DRTM_PCR_BANKS=sha256`                   | With PSP DRTM service, TPM with SHA-256 alone     |
+| `sha384`       | `DRTM_PCR_BANKS=sha1,sha256,sha384`                      | Without PSP, TPM with SHA-1, SHA-256 and SHA-384  |
+| `intel`        | `DRTM_VENDOR=intel`                                      | Intel TXT, TPM with SHA-1 and SHA-256             |
+| `intel-sha256` | `DRTM_VENDOR=intel`, `DRTM_PCR_BANKS=sha256`             | Intel TXT, TPM with SHA-256 alone                 |
+| `intel-sha384` | `DRTM_VENDOR=intel`, `DRTM_PCR_BANKS=sha1,sha256,sha384` | Intel TXT, TPM with SHA-1, SHA-256 and SHA-384    |
 
 On the upstream releases the PSP configurations set `DRTM_PSP=classic`
 instead, since their SKL never talks to the service. [Under the
@@ -321,8 +383,9 @@ task ci:test RELEASE=v0.5.2 CONFIG=sha256
 task ci:test RELEASE=amd-drtm-test-image-4 CONFIG=psp -- -k xen_efi
 ```
 
-`ci:test` clears `DRTM_PSP`, `DRTM_PCR_BANKS` and `DRTM_TB_IMAGE` and
-sets the cell's own, so the shell's setting cannot leak into a cell.
+`ci:test` clears `DRTM_VENDOR`, `DRTM_PSP`, `DRTM_PCR_BANKS` and
+`DRTM_TB_IMAGE` and sets the cell's own, so the shell's setting cannot
+leak into a cell.
 Everything else, `DRTM_QEMU_BINARY` and `DRTM_QEMU_ARGS` among them,
 passes through.
 
@@ -350,13 +413,13 @@ its hash. The release is created by hand with the tarball attached.
 Every boot job uploads its `logs/` as an artifact, pass or fail, with
 `results.json` in it. The `report` job downloads them all and runs
 `task report RESULTS=<dir>`, which renders a page and one badge per
-release: a section per configuration with a table of the entries the
-suite boots against the releases, a cell being ✅ when every test of
-the entry passed and ❌ when one failed, whatever the suite expected,
-with the expectations noted under the table and the full per-test table
-folded below. The page goes to the job summary and, on a push to
-`main`, to the `results` branch, one commit per run, which the badges
-in the README read.
+release: a section per vendor and in it one per configuration, with a
+table of the entries the suite boots against the releases, a cell being
+✅ when every test of the entry passed and ❌ when one failed, whatever
+the suite expected, with the expectations noted under the table and the
+full per-test table folded below. The page goes to the job summary
+and, on a push to `main`, to the `results` branch, one commit per run,
+which the badges in the README read.
 
 ## Timeouts
 
