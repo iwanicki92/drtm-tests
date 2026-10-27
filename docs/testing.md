@@ -9,7 +9,7 @@ SPDX-License-Identifier: BSD-3-Clause
 ## Running
 
 ```sh
-export DRTM_QEMU_BINARY=/path/to/qemu-system-x86_64   # the drtm branch
+export DRTM_QEMU_BINARY=/path/to/qemu-system-x86_64   # the drtm-txt branch
 uv run pytest                 # every entry
 uv run pytest -k xen_efi      # one entry's tests, and only its boot
 uv run pytest --collect-only  # what would run, booting nothing
@@ -328,7 +328,7 @@ passes through.
 
 ### The QEMU bundle
 
-CI does not build QEMU. The `drtm` branch is released as a tarball on
+CI does not build QEMU. The `drtm-txt` branch is released as a tarball on
 [our QEMU fork](https://github.com/iwanicki92/qemu/releases), tag
 `drtm-<QEMU version>-<n>`. It holds `qemu/bin/qemu-system-x86_64` and
 `qemu/share/qemu/`, so the binary finds its firmware blobs, which the

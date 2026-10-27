@@ -6,17 +6,17 @@ SPDX-License-Identifier: BSD-3-Clause
 
 # QEMU: building, command line and traces
 
-How to build the `drtm` branch of QEMU, what the harness runs on it for
+How to build the `drtm-txt` branch of QEMU, what the harness runs on it for
 every boot, argument by argument, what the `amd-drtm=on` machine option
 stands for, how to read the launch traces it writes to `qemu.log`, and
 what the PSP device does. `uv run tb-boot -n` prints the exact command
 for a boot by hand.
 
-## Building the `drtm` branch
+## Building the `drtm-txt` branch
 
 Upstream QEMU raises `#UD` on `SKINIT` and knows none of the DRTM
-devices, so every boot needs a build of the `drtm` branch of
-[our QEMU fork](https://github.com/iwanicki92/qemu/tree/drtm). QEMU's own
+devices, so every boot needs a build of the `drtm-txt` branch of
+[our QEMU fork](https://github.com/iwanicki92/qemu/tree/drtm-txt). QEMU's own
 build wants a C toolchain, `ninja-build`, `pkg-config`, Python 3 with
 `tomli`, `libglib2.0-dev` and `libpixman-1-dev`. Two more things decide
 what a launch under it can do:
@@ -89,7 +89,7 @@ qemu-system-x86_64 \
     -serial mon:stdio
 ```
 
-`qemu-system-x86_64` is the `drtm` branch build from above.
+`qemu-system-x86_64` is the `drtm-txt` branch build from above.
 
 ### The `amd-drtm=on` shorthand
 

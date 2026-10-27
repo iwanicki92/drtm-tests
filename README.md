@@ -16,17 +16,18 @@ checks what each launch leaves behind: the emulator's launch record, the
 TPM's PCRs, the event log that has to replay to them, and what Xen or
 Linux say about it.
 
-Upstream QEMU raises `#UD` on `SKINIT`. The [`drtm` branch][qemu-fork] of
+Upstream QEMU raises `#UD` on `SKINIT`. The [`drtm-txt` branch][qemu-fork] of
 our QEMU fork adds the launch machine, `-machine q35,amd-drtm=on`, and
 this suite needs that build. Point `DRTM_QEMU_BINARY` at it.
 
 ## Requirements
 
-- The `drtm` branch of QEMU, built for `x86_64-softmmu` with
+- The `drtm-txt` branch of QEMU, built for `x86_64-softmmu` with
     `--enable-tpm`. `task ci:qemu` fetches the release CI boots with and
     prints its binary. It was built on Ubuntu 24.04 and links that
     release's glibc, glib and pixman, so on another host you will likely
-    have to [build the `drtm` branch](docs/qemu.md#building-the-drtm-branch)
+    have to
+    [build the `drtm-txt` branch](docs/qemu.md#building-the-drtm-txt-branch)
     yourself.
 - `swtpm` and `swtpm-tools` on `PATH`.
 - `mtools` on `PATH`, to read `grub.cfg` off the image without mounting
@@ -54,7 +55,7 @@ writes its logs to a numbered directory under `logs/`.
 
 | Variable           | Default                 | Meaning                                                                                                       |
 |--------------------|-------------------------|---------------------------------------------------------------------------------------------------------------|
-| `DRTM_QEMU_BINARY` | none, required          | The `drtm` branch's `qemu-system-x86_64`.                                                                     |
+| `DRTM_QEMU_BINARY` | none, required          | The `drtm-txt` branch's `qemu-system-x86_64`.                                                                 |
 | `DRTM_TB_RELEASE`  | `amd-drtm-test-image-3` | Image release to boot, a tag pinned in `drtmtest/trenchboot.py`.                                              |
 | `DRTM_TB_IMAGE`    | unset                   | A local `.wic` to boot instead, read in place. No entry is expected broken on it. Excludes `DRTM_TB_RELEASE`. |
 | `DRTM_PSP`         | `off`                   | Adds the PSP DRTM service, see below.                                                                         |
@@ -103,7 +104,7 @@ host.
 - [Design](docs/design.md): why the suite is shaped as it is.
 - [Testing](docs/testing.md): what a boot looks like and what the tests
     assert.
-- [QEMU](docs/qemu.md): how to build the `drtm` branch, what every QEMU
+- [QEMU](docs/qemu.md): how to build the `drtm-txt` branch, what every QEMU
     argument is for and how to read the launch traces.
 
 ## License
@@ -112,7 +113,7 @@ BSD-3-Clause, see [LICENSE](LICENSE). `drtmtest/qmp_client.py` is adapted
 from third-party Apache-2.0 code and stays under that license, see
 [NOTICE](NOTICE).
 
-[qemu-fork]: https://github.com/iwanicki92/qemu/tree/drtm
+[qemu-fork]: https://github.com/iwanicki92/qemu/tree/drtm-txt
 [tb-fork]: https://github.com/iwanicki92/meta-trenchboot/tree/amd-drtm
 [results]: https://github.com/iwanicki92/drtm-tests/blob/results/README.md
 [badge-fork]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/amd-drtm-test-image-3.json
