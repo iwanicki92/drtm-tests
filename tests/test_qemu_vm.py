@@ -19,6 +19,7 @@ from drtmtest.qemu_vm import (
     Settings,
     allocate_pcr_banks,
     manufacture_tpm_1_2,
+    running_addresses,
     tpm_args,
 )
 
@@ -160,3 +161,23 @@ def test_a_tpm_1_2_state_is_written_without_tpm2(tmp_path: Path):
     with open(tmp_path / "swtpm.log", "wb") as log:
         manufacture_tpm_1_2(tmp_path / "state", log, program=str(script))
     assert "--tpm2" not in (tmp_path / "state" / "tpm-00.permall").read_text()
+
+
+# `info registers -a` from a guest spinning in the kernel, its AP waiting,
+# and a third CPU halted, cut to a few lines a CPU. The monitor ends its
+# lines with CR LF.
+_REGISTERS = """
+CPU#0
+RAX=00000000000971db RBX=0000001734b7bdb1 RCX=0000000000000001 RDX=0000000000000002
+RIP=ffffffff81f5545c RFL=00000202 [-------] CPL=0 II=0 A20=1 SMM=0 HLT=0
+ES =0000 0000000000000000 00000000 00000000
+CPU#1
+EAX=00000000 EBX=00000000 ECX=00000000 EDX=00000000
+EIP=7a3ec020 EFL=00000046 [---Z-P-] CPL=0 II=0 A20=1 SMM=0 HLT=0
+CPU#2
+RIP=ffffffff81000a3e RFL=00000246 [---Z-P-] CPL=0 II=0 A20=1 SMM=0 HLT=1
+""".replace("\n", "\r\n")
+
+
+def test_the_running_cpus_are_the_ones_not_halted():
+    assert running_addresses(_REGISTERS) == {0: "ffffffff81f5545c", 1: "7a3ec020"}

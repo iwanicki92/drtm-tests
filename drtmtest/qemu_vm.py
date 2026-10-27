@@ -7,6 +7,7 @@ an swtpm behind it when asked for. What it boots is the caller's options.
 """
 
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -25,6 +26,28 @@ _PROBE_TIMEOUT = 30.0
 # The longest a boot stays silent: GRUB loading Xen, the kernel and the
 # initrd over IDE is about 10 s idle, and a loaded host stretches it.
 IDLE_TIMEOUT = 90.0
+
+# A guest spinning in place is silent too: after `STUCK_AFTER` of silence,
+# every CPU not halted keeping its address for `STUCK_FOR` is a hang.
+STUCK_AFTER = 30.0
+STUCK_FOR = 20.0
+_STUCK_SAMPLE = 2.0
+
+# In `info registers -a`, where each CPU's block opens with `CPU#<index>`:
+# its instruction pointer and whether it is halted.
+_CPU_RE = re.compile(r"^CPU#", re.MULTILINE)
+_IP_RE = re.compile(r"^[RE]IP=([0-9a-f]+) .* HLT=(\d)", re.MULTILINE)
+
+
+def running_addresses(registers: str) -> dict[int, str]:
+    """The address of every CPU that is not halted, by index, from the
+    monitor's `info registers -a`."""
+    addresses = {}
+    for block in _CPU_RE.split(registers.replace("\r", ""))[1:]:
+        ip = _IP_RE.search(block)
+        if ip is not None and ip[2] == "0":
+            addresses[int(block.split("\n", 1)[0])] = ip[1]
+    return addresses
 
 
 def binary() -> str:
@@ -585,6 +608,14 @@ class QemuVm:
                 f"the VM stopped as panicked, see {self.log_dir / 'qemu.log'}"
             )
 
+    def _running_addresses(self) -> dict[int, str]:
+        assert self.qmp is not None
+        try:
+            out = self.qmp.human_monitor_command("info registers -a")
+        except (OSError, RuntimeError, ValueError):
+            return {}
+        return running_addresses(out.get("return", ""))
+
     def expect(
         self,
         needle: str,
@@ -599,7 +630,8 @@ class QemuVm:
         such as a kernel panic. `answers` map a prompt to what to send when
         it appears, once per appearance, for prompts that hold the boot.
         `idle` is how long the console may stay silent: a guest that hangs
-        prints nothing, and that is reported well before `timeout`.
+        prints nothing, and that is reported well before `timeout`, sooner
+        if its CPUs spin in place.
         """
         needle_b = needle.encode()
         failure_b = [f.encode() for f in failures]
@@ -608,17 +640,33 @@ class QemuVm:
         deadline = now + timeout
         last_seen = now
         seen = 0
+        stuck: dict[int, str] = {}
+        stuck_since = sampled = now
         while True:
             with self._serial_lock:
                 buf = bytes(self._serial_buf[self._cursor :])
+            now = time.monotonic()
             if len(buf) != seen:
                 seen = len(buf)
-                last_seen = time.monotonic()
-            elif time.monotonic() - last_seen >= idle:
+                last_seen = now
+                stuck = {}
+            elif now - last_seen >= idle:
                 raise GuestHung(
                     f"nothing on the console for {idle:.0f}s while waiting for "
                     f"{needle!r}. Read since the last match:\n{buf.decode('utf-8', 'replace')}"
                 )
+            elif now - last_seen >= STUCK_AFTER and now - sampled >= _STUCK_SAMPLE:
+                sampled = now
+                addresses = self._running_addresses()
+                if not addresses or addresses != stuck:
+                    stuck, stuck_since = addresses, now
+                elif now - stuck_since >= STUCK_FOR:
+                    raise GuestHung(
+                        f"nothing on the console for {now - last_seen:.0f}s and "
+                        f"every running CPU stuck at one address ({stuck}) while "
+                        f"waiting for {needle!r}. Read since the last match:\n"
+                        f"{buf.decode('utf-8', 'replace')}"
+                    )
             at = buf.find(needle_b)
             if at >= 0:
                 end = at + len(needle_b)

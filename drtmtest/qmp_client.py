@@ -56,7 +56,18 @@ class QmpClient:
         msg = {"execute": command, "arguments": args}
         logger.debug("QMP command: %s", msg)
         sock.sendall(json.dumps(msg).encode())
-        response = sock.recv(8192).decode()
+        # A reply can outgrow one read, `info registers -a` on a few CPUs
+        # among them. QMP ends every message with a newline, and an event
+        # can come ahead of the reply.
+        data = b""
+        while not (
+            data.endswith(b"\n") and (b'"return"' in data or b'"error"' in data)
+        ):
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            data += chunk
+        response = data.decode()
         logger.debug("QMP response: %s", response)
         json_objects = [
             json.loads(line) for line in response.splitlines() if line.strip()

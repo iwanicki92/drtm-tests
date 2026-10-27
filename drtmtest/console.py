@@ -32,9 +32,10 @@ SHELL_PROMPT = "root@tb:~#"
 # GRUB's own shell, entered from the menu with `c`.
 GRUB_PROMPT = "grub> "
 
-# What ends a boot early. Xen's panic, Linux's, and the strict-mode stop
-# QEMU reports through the run state rather than the console.
-FAILURES = ("Panic on CPU", "Kernel panic")
+# What ends a boot early: Xen's panic, Linux's, and the initramfs finding
+# no root disk, after which its `fatal` sleeps forever. The strict-mode
+# stop QEMU reports through the run state rather than the console.
+FAILURES = ("Panic on CPU", "Kernel panic", "doesn't exist or does not contain a /dev")
 
 KEY_DOWN = b"\x1b[B"
 

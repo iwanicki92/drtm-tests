@@ -427,8 +427,11 @@ A boot to the login prompt takes a minute or two under TCG, longer when
 several overlap. `BOOT_TIMEOUT` in `tests/conftest.py` allows for a full
 batch, and the pytest timeout in `pyproject.toml` sits above it as a
 backstop, raising inside the test so `results.txt` is still written. A
-panic on the console, or the VM stopping under strict mode, which the
-pause panic action keeps alive to be seen, ends the wait at once with the
-reason, and a console silent for `IDLE_TIMEOUT` in
-`drtmtest/qemu_vm.py` ends it as a hang, since no phase of a boot pauses
-that long.
+panic on the console, the initramfs saying it found no root disk, or the
+VM stopping under strict mode, which the pause panic action keeps alive
+to be seen, ends the wait at once with the reason. A console silent for
+`IDLE_TIMEOUT` in `drtmtest/qemu_vm.py` ends it as a hang, since no
+phase of a boot pauses that long. So does one silent for `STUCK_AFTER`
+whose running CPUs then keep their addresses for `STUCK_FOR`, which the
+harness reads with the monitor's `info registers -a`: a guest spinning
+in a loop of one translation block.
