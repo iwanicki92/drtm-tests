@@ -298,9 +298,10 @@ SLB there too. The log's own `SKINIT` digest is checked against the
 SLB's in SHA-1 and SHA-256, the banks the SKL hashes for. On the
 upstream releases under any banks but the default two, the Linux
 launches are expected not to boot and the bank test is expected to
-fail, and with a bank beyond those two the MB2 replay is expected to
-miss in it, since their Xen copies the multiboot information's digests
-for SHA-1 and SHA-256 alone. `tests/conftest.py` holds the three.
+fail. With a bank beyond those two the MB2 replay is expected to miss
+in it, since their Xen copies the multiboot information's digests for
+SHA-1 and SHA-256 alone, and the EFI launch to leave PCR 18 zero in it,
+since nothing extends it there. `tests/conftest.py` holds the four.
 
 ## Logs
 

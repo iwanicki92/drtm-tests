@@ -574,6 +574,21 @@ def expects_boot(name: str):
     return pytest.mark.xfail(reason is not None, reason=reason or "", strict=True)
 
 
+def expects_xens_efi_banks(name: str):
+    """Marks PCR 18 of a Xen EFI launch: on the upstream releases nothing
+    extends it in a bank beyond SHA-1 and SHA-256, so under more banks the
+    test must fail."""
+    entry = ENTRIES[name]
+    return pytest.mark.xfail(
+        MORE_BANKS
+        and entry.launch
+        and entry.os == "xen"
+        and entry.firmware == "dasharo",
+        reason="the upstream Xen EFI launch extends PCR 18 in SHA-1 and SHA-256 alone",
+        strict=True,
+    )
+
+
 def expects_every_cpu(name: str):
     """Marks what a launch's APs leave: on Intel the upstream releases'
     Xen gives `MLE_JOIN` the GDT's base as its limit, which SENTER's wake

@@ -17,6 +17,7 @@ from conftest import (
     expects_boot,
     expects_every_cpu,
     expects_open_localities,
+    expects_xens_efi_banks,
 )
 
 from drtmtest import machine, trenchboot
@@ -73,7 +74,7 @@ _ERROR_TRACES = {
 }
 
 
-def _params(names: list[str], *marks, cpus: bool = False) -> list:
+def _params(names: list[str], *marks, cpus: bool = False, banks: bool = False) -> list:
     return [
         pytest.param(
             name,
@@ -81,6 +82,7 @@ def _params(names: list[str], *marks, cpus: bool = False) -> list:
                 expects_boot(name),
                 *marks,
                 *([expects_every_cpu(name)] if cpus else []),
+                *([expects_xens_efi_banks(name)] if banks else []),
             ],
         )
         for name in names
@@ -118,7 +120,9 @@ def unexpected_errors(boot: Boot) -> list[str]:
     return errors
 
 
-@pytest.mark.parametrize("name", _params(LAUNCHES, expects_open_localities()))
+@pytest.mark.parametrize(
+    "name", _params(LAUNCHES, expects_open_localities(), banks=True)
+)
 def test_launch_extends_the_drtm_pcrs(name: str, request: pytest.FixtureRequest):
     """The launch reached the shell and reset and extended PCR 17 and 18
     in every bank. A launch that failed and fell back to a normal boot
