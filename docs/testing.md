@@ -318,7 +318,7 @@ host the same way:
 ```sh
 export DRTM_QEMU_BINARY=$(task ci:qemu)   # the pinned bundle, once
 task ci:test RELEASE=v0.5.2 CONFIG=sha256
-task ci:test RELEASE=amd-drtm-test-image-3 CONFIG=psp -- -k xen_efi
+task ci:test RELEASE=amd-drtm-test-image-4 CONFIG=psp -- -k xen_efi
 ```
 
 `ci:test` clears `DRTM_PSP`, `DRTM_PCR_BANKS` and `DRTM_TB_IMAGE` and
