@@ -81,7 +81,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             swtpm swtpm-tools mtools \
-            libpixman-1-0 libfdt1 libglib2.0-0t64 libgcrypt20
+            libpixman-1-0 libfdt1 libglib2.0-0t64 libgcrypt20 libcapstone4
       - uses: astral-sh/setup-uv@v10.2.0
       - uses: arduino/setup-task@v3
         with:
