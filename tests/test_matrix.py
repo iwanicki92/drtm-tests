@@ -22,9 +22,9 @@ def test_the_workflow_gets_every_release_under_every_configuration(capsys):
 
 
 def test_a_selection_of_releases_is_kept_in_the_order_given():
-    assert matrix.releases("v0.5.2, amd-drtm-test-image-4") == [
+    assert matrix.releases("v0.5.2, amd-drtm-test-image-5") == [
         "v0.5.2",
-        "amd-drtm-test-image-4",
+        "amd-drtm-test-image-5",
     ]
     with pytest.raises(SystemExit, match="v0.5.9"):
         matrix.releases("v0.5.9")
@@ -78,7 +78,7 @@ def test_a_cell_replaces_the_configuration_variables_and_the_local_image(monkeyp
     # The service under an upstream release is the classic session: its SKL
     # never talks to the service, so the launches are expected to fail.
     assert matrix.environment("v0.5.2", "psp")["DRTM_PSP"] == "classic"
-    assert matrix.environment("amd-drtm-test-image-4", "psp-sha256")["DRTM_PSP"] == "on"
+    assert matrix.environment("amd-drtm-test-image-5", "psp-sha256")["DRTM_PSP"] == "on"
     intel = matrix.environment("v0.5.2", "intel-sha384")
     assert intel["DRTM_VENDOR"] == "intel"
     assert intel["DRTM_PCR_BANKS"] == "sha1,sha256,sha384"

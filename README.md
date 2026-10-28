@@ -6,7 +6,7 @@ SPDX-License-Identifier: BSD-3-Clause
 
 # drtm-tests
 
-[![amd-drtm-test-image-4][badge-fork]][results]
+[![amd-drtm-test-image-5][badge-fork]][results]
 [![v0.5.2][badge-v0.5.2]][results]
 [![v0.5.3-rc1][badge-v0.5.3-rc1]][results]
 
@@ -58,7 +58,7 @@ writes its logs to a numbered directory under `logs/`.
 | Variable           | Default                 | Meaning                                                                                                       |
 |--------------------|-------------------------|---------------------------------------------------------------------------------------------------------------|
 | `DRTM_QEMU_BINARY` | none, required          | The `drtm-txt` branch's `qemu-system-x86_64`.                                                                 |
-| `DRTM_TB_RELEASE`  | `amd-drtm-test-image-4` | Image release to boot, a tag pinned in `drtmtest/trenchboot.py`.                                              |
+| `DRTM_TB_RELEASE`  | `amd-drtm-test-image-5` | Image release to boot, a tag pinned in `drtmtest/trenchboot.py`.                                              |
 | `DRTM_TB_IMAGE`    | unset                   | A local `.wic` to boot instead, read in place. No entry is expected broken on it. Excludes `DRTM_TB_RELEASE`. |
 | `DRTM_VENDOR`      | `amd`                   | `intel` boots the Intel TXT machine instead of AMD's.                                                         |
 | `DRTM_PSP`         | `off`                   | Adds the PSP DRTM service, see below. AMD only.                                                               |
@@ -66,7 +66,7 @@ writes its logs to a numbered directory under `logs/`.
 | `DRTM_QEMU_ARGS`   | unset                   | Words appended to every QEMU command line, so what they repeat wins. `tb-boot` takes the same after `--`.     |
 | `DRTM_QEMU_ACCEL`  | `tcg`                   | `kvm` boots the normal entries faster and cannot run the launches.                                            |
 
-The default image is the `amd-drtm-test-image-4` release of [our
+The default image is the `amd-drtm-test-image-5` release of [our
 meta-trenchboot fork][tb-fork], a build of its `amd-drtm` branch with
 both SKL builds and the fixes the upstream releases lack.
 
@@ -119,6 +119,6 @@ from third-party Apache-2.0 code and stays under that license, see
 [qemu-fork]: https://github.com/iwanicki92/qemu/tree/drtm-txt
 [tb-fork]: https://github.com/iwanicki92/meta-trenchboot/tree/amd-drtm
 [results]: https://github.com/iwanicki92/drtm-tests/blob/results/README.md
-[badge-fork]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/amd-drtm-test-image-4.json
+[badge-fork]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/amd-drtm-test-image-5.json
 [badge-v0.5.2]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/v0.5.2.json
 [badge-v0.5.3-rc1]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/iwanicki92/drtm-tests/results/badges/v0.5.3-rc1.json
