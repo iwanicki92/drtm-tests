@@ -26,7 +26,9 @@ ANY_KEY = "Press any key to continue"
 # "Xen version:" line comes later and has a colon.
 XEN_BANNER = "Xen version "
 LINUX_BANNER = "Linux version"
-LOGIN_PROMPT = "tb login:"
+# getty writes the host name and " login: " apart, and a kernel message
+# on the console can land between them, so the host name is left out.
+LOGIN_PROMPT = "login:"
 SHELL_PROMPT = "root@tb:~#"
 
 # GRUB's own shell, entered from the menu with `c`.
