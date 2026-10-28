@@ -1,6 +1,6 @@
 # Boot matrix results
 
-Commit `08905a9d5758`, run [14](https://github.com/iwanicki92/drtm-tests/actions/runs/40749448330), finished 2026-10-28 19:08:43.
+Commit `3ad79b52fab6`, run [15](https://github.com/iwanicki92/drtm-tests/actions/runs/40754328933), finished 2026-10-28 19:38:56.
 QEMU bundle `drtm-11.1.50-2` (11.1.50 (v11.1.0-1805-g7355f4cbb2)), swtpm 0.7.3.
 
 Rows are the GRUB entries the suite boots, named as their fixtures
@@ -346,10 +346,9 @@ boot did, and the notes under the table what the suite expected of it.
     - `linux_legacy_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_alt_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `xen_efi_debug_launch` expected: GRUB's debug print after exit_boot_services goes to the EFI console
-- `v0.5.3-rc1`: 7 failed, 86 passed, 31 xfailed.
+- `v0.5.3-rc1`: 93 passed, 31 xfailed.
     - `xen_efi_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `xen_mb2_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
-    - `xen_mb2_launch`: 7 failed unexpectedly
     - `linux_launch` expected: panics in check_timer: SKL entered startup_32, GIF never set
     - `linux_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_legacy_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
@@ -387,20 +386,20 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_grubcfg.py::test_a_disk_without_one_is_refused`                                       | passed                | passed  | passed     |
 | `tests/test_grubcfg.py::test_the_menu_is_read_in_the_environment_given`                           | passed                | passed  | passed     |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[xen_efi_launch]`                         | passed                | passed  | passed     |
-| `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[xen_mb2_launch]`                         | passed                | passed  | failed     |
+| `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[xen_mb2_launch]`                         | passed                | passed  | passed     |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[linux_launch]`                           | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[linux_legacy_launch]`                    | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[linux_alt_launch]`                       | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[xen_efi_debug_launch]`                   | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[xen_efi_launch]`                           | passed                | passed  | passed     |
-| `tests/test_launch.py::test_launch_brings_every_cpu_up[xen_mb2_launch]`                           | passed                | passed  | failed     |
+| `tests/test_launch.py::test_launch_brings_every_cpu_up[xen_mb2_launch]`                           | passed                | passed  | passed     |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[linux_launch]`                             | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[linux_legacy_launch]`                      | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[linux_alt_launch]`                         | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[xen_efi_debug_launch]`                     | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[xen_efi_launch]`                      | passed                | passed  | passed     |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[xen_efi]`                             | passed                | passed  | passed     |
-| `tests/test_launch.py::test_boot_shows_no_unexpected_errors[xen_mb2_launch]`                      | passed                | passed  | failed     |
+| `tests/test_launch.py::test_boot_shows_no_unexpected_errors[xen_mb2_launch]`                      | passed                | passed  | passed     |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[linux_launch]`                        | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[linux_legacy_launch]`                 | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[linux_alt_launch]`                    | passed                | xfailed | xfailed    |
@@ -480,10 +479,10 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_xen.py::test_efi_debug_launch_is_recorded_by_the_platform`                            | passed                | xfailed | xfailed    |
 | `tests/test_xen.py::test_efi_debug_launch_prints_after_the_handover`                              | passed                | xfailed | xfailed    |
 | `tests/test_xen.py::test_efi_normal_boot_launches_nothing`                                        | passed                | passed  | passed     |
-| `tests/test_xen.py::test_mb2_launch_is_recorded_by_the_platform`                                  | passed                | passed  | failed     |
-| `tests/test_xen.py::test_mb2_launch_is_seen_by_xen`                                               | passed                | passed  | failed     |
-| `tests/test_xen.py::test_mb2_launch_brings_the_iommu_up`                                          | passed                | passed  | failed     |
-| `tests/test_xen.py::test_mb2_launch_log_replays_to_the_pcrs`                                      | passed                | passed  | failed     |
+| `tests/test_xen.py::test_mb2_launch_is_recorded_by_the_platform`                                  | passed                | passed  | passed     |
+| `tests/test_xen.py::test_mb2_launch_is_seen_by_xen`                                               | passed                | passed  | passed     |
+| `tests/test_xen.py::test_mb2_launch_brings_the_iommu_up`                                          | passed                | passed  | passed     |
+| `tests/test_xen.py::test_mb2_launch_log_replays_to_the_pcrs`                                      | passed                | passed  | passed     |
 | `tests/test_xen.py::test_mb2_launch_log_declares_the_tpms_banks`                                  | passed                | xfailed | xfailed    |
 
 </details>
