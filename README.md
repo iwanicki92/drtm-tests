@@ -1,7 +1,7 @@
 # Boot matrix results
 
-Commit `f88f3ee57e99`, run [13](https://github.com/iwanicki92/drtm-tests/actions/runs/40601570445), finished 2026-10-27 23:32:30.
-QEMU bundle `drtm-11.1.50-1` (11.1.50 (v11.1.0-1804-g8397ccc4b3)), swtpm 0.7.3.
+Commit `08905a9d5758`, run [14](https://github.com/iwanicki92/drtm-tests/actions/runs/40749448330), finished 2026-10-28 19:08:43.
+QEMU bundle `drtm-11.1.50-2` (11.1.50 (v11.1.0-1805-g7355f4cbb2)), swtpm 0.7.3.
 
 Rows are the GRUB entries the suite boots, named as their fixtures
 in `tests/conftest.py`, columns the releases. ✅ every test of the
@@ -12,7 +12,7 @@ boot did, and the notes under the table what the suite expected of it.
 
 ### Without PSP, TPM with SHA-1 and SHA-256
 
-| Entry                  | amd-drtm-test-image-4 | v0.5.2 | v0.5.3-rc1 |
+| Entry                  | amd-drtm-test-image-5 | v0.5.2 | v0.5.3-rc1 |
 |------------------------|-----------------------|--------|------------|
 | `xen_efi_launch`       | ✅                     | ✅      | ✅          |
 | `xen_efi`              | ✅                     | ✅      | ✅          |
@@ -23,7 +23,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `xen_efi_debug_launch` | ✅                     | ❌      | ❌          |
 | `linux`                | ✅                     | ✅      | ✅          |
 
-- `amd-drtm-test-image-4`: 124 passed.
+- `amd-drtm-test-image-5`: 124 passed.
 - `v0.5.2`: 111 passed, 13 xfailed.
     - `linux_launch` expected: panics in check_timer: SKL entered startup_32, GIF never set
     - `xen_efi_debug_launch` expected: GRUB's debug print after exit_boot_services goes to the EFI console
@@ -34,7 +34,7 @@ boot did, and the notes under the table what the suite expected of it.
 <details>
 <summary>Every test</summary>
 
-| Test                                                                                              | amd-drtm-test-image-4 | v0.5.2  | v0.5.3-rc1 |
+| Test                                                                                              | amd-drtm-test-image-5 | v0.5.2  | v0.5.3-rc1 |
 |---------------------------------------------------------------------------------------------------|-----------------------|---------|------------|
 | `tests/test_console.py::test_a_dump_is_the_bytes_it_spells`                                       | passed                | passed  | passed     |
 | `tests/test_console.py::test_the_newlines_a_long_dump_wraps_at_are_ignored`                       | passed                | passed  | passed     |
@@ -165,7 +165,7 @@ boot did, and the notes under the table what the suite expected of it.
 
 ### With PSP DRTM service, TPM with SHA-1 and SHA-256
 
-| Entry                  | amd-drtm-test-image-4 | v0.5.2 | v0.5.3-rc1 |
+| Entry                  | amd-drtm-test-image-5 | v0.5.2 | v0.5.3-rc1 |
 |------------------------|-----------------------|--------|------------|
 | `xen_efi_launch`       | ✅                     | ❌      | ❌          |
 | `xen_efi`              | ✅                     | ✅      | ✅          |
@@ -176,7 +176,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `xen_efi_debug_launch` | ✅                     | ❌      | ❌          |
 | `linux`                | ✅                     | ✅      | ✅          |
 
-- `amd-drtm-test-image-4`: 123 passed, 1 skipped.
+- `amd-drtm-test-image-5`: 123 passed, 1 skipped.
 - `v0.5.2`: 89 passed, 1 skipped, 34 xfailed.
     - `xen_efi_launch` expected: classic SKL: no LAUNCH, so the PSP's locality locks stay on the TPM
     - `xen_mb2_launch` expected: classic SKL: no LAUNCH, so the PSP's locality locks stay on the TPM
@@ -195,7 +195,7 @@ boot did, and the notes under the table what the suite expected of it.
 <details>
 <summary>Every test</summary>
 
-| Test                                                                                              | amd-drtm-test-image-4 | v0.5.2  | v0.5.3-rc1 |
+| Test                                                                                              | amd-drtm-test-image-5 | v0.5.2  | v0.5.3-rc1 |
 |---------------------------------------------------------------------------------------------------|-----------------------|---------|------------|
 | `tests/test_console.py::test_a_dump_is_the_bytes_it_spells`                                       | passed                | passed  | passed     |
 | `tests/test_console.py::test_the_newlines_a_long_dump_wraps_at_are_ignored`                       | passed                | passed  | passed     |
@@ -326,7 +326,7 @@ boot did, and the notes under the table what the suite expected of it.
 
 ### Without PSP, TPM with SHA-256 alone
 
-| Entry                  | amd-drtm-test-image-4 | v0.5.2 | v0.5.3-rc1 |
+| Entry                  | amd-drtm-test-image-5 | v0.5.2 | v0.5.3-rc1 |
 |------------------------|-----------------------|--------|------------|
 | `xen_efi_launch`       | ✅                     | ❌      | ❌          |
 | `xen_efi`              | ✅                     | ✅      | ✅          |
@@ -337,7 +337,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `xen_efi_debug_launch` | ✅                     | ❌      | ❌          |
 | `linux`                | ✅                     | ✅      | ✅          |
 
-- `amd-drtm-test-image-4`: 124 passed.
+- `amd-drtm-test-image-5`: 124 passed.
 - `v0.5.2`: 93 passed, 31 xfailed.
     - `xen_efi_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `xen_mb2_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
@@ -346,9 +346,10 @@ boot did, and the notes under the table what the suite expected of it.
     - `linux_legacy_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_alt_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `xen_efi_debug_launch` expected: GRUB's debug print after exit_boot_services goes to the EFI console
-- `v0.5.3-rc1`: 93 passed, 31 xfailed.
+- `v0.5.3-rc1`: 7 failed, 86 passed, 31 xfailed.
     - `xen_efi_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `xen_mb2_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
+    - `xen_mb2_launch`: 7 failed unexpectedly
     - `linux_launch` expected: panics in check_timer: SKL entered startup_32, GIF never set
     - `linux_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
     - `linux_legacy_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
@@ -358,7 +359,7 @@ boot did, and the notes under the table what the suite expected of it.
 <details>
 <summary>Every test</summary>
 
-| Test                                                                                              | amd-drtm-test-image-4 | v0.5.2  | v0.5.3-rc1 |
+| Test                                                                                              | amd-drtm-test-image-5 | v0.5.2  | v0.5.3-rc1 |
 |---------------------------------------------------------------------------------------------------|-----------------------|---------|------------|
 | `tests/test_console.py::test_a_dump_is_the_bytes_it_spells`                                       | passed                | passed  | passed     |
 | `tests/test_console.py::test_the_newlines_a_long_dump_wraps_at_are_ignored`                       | passed                | passed  | passed     |
@@ -386,20 +387,20 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_grubcfg.py::test_a_disk_without_one_is_refused`                                       | passed                | passed  | passed     |
 | `tests/test_grubcfg.py::test_the_menu_is_read_in_the_environment_given`                           | passed                | passed  | passed     |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[xen_efi_launch]`                         | passed                | passed  | passed     |
-| `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[xen_mb2_launch]`                         | passed                | passed  | passed     |
+| `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[xen_mb2_launch]`                         | passed                | passed  | failed     |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[linux_launch]`                           | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[linux_legacy_launch]`                    | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[linux_alt_launch]`                       | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[xen_efi_debug_launch]`                   | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[xen_efi_launch]`                           | passed                | passed  | passed     |
-| `tests/test_launch.py::test_launch_brings_every_cpu_up[xen_mb2_launch]`                           | passed                | passed  | passed     |
+| `tests/test_launch.py::test_launch_brings_every_cpu_up[xen_mb2_launch]`                           | passed                | passed  | failed     |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[linux_launch]`                             | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[linux_legacy_launch]`                      | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[linux_alt_launch]`                         | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[xen_efi_debug_launch]`                     | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[xen_efi_launch]`                      | passed                | passed  | passed     |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[xen_efi]`                             | passed                | passed  | passed     |
-| `tests/test_launch.py::test_boot_shows_no_unexpected_errors[xen_mb2_launch]`                      | passed                | passed  | passed     |
+| `tests/test_launch.py::test_boot_shows_no_unexpected_errors[xen_mb2_launch]`                      | passed                | passed  | failed     |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[linux_launch]`                        | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[linux_legacy_launch]`                 | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[linux_alt_launch]`                    | passed                | xfailed | xfailed    |
@@ -479,17 +480,17 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_xen.py::test_efi_debug_launch_is_recorded_by_the_platform`                            | passed                | xfailed | xfailed    |
 | `tests/test_xen.py::test_efi_debug_launch_prints_after_the_handover`                              | passed                | xfailed | xfailed    |
 | `tests/test_xen.py::test_efi_normal_boot_launches_nothing`                                        | passed                | passed  | passed     |
-| `tests/test_xen.py::test_mb2_launch_is_recorded_by_the_platform`                                  | passed                | passed  | passed     |
-| `tests/test_xen.py::test_mb2_launch_is_seen_by_xen`                                               | passed                | passed  | passed     |
-| `tests/test_xen.py::test_mb2_launch_brings_the_iommu_up`                                          | passed                | passed  | passed     |
-| `tests/test_xen.py::test_mb2_launch_log_replays_to_the_pcrs`                                      | passed                | passed  | passed     |
+| `tests/test_xen.py::test_mb2_launch_is_recorded_by_the_platform`                                  | passed                | passed  | failed     |
+| `tests/test_xen.py::test_mb2_launch_is_seen_by_xen`                                               | passed                | passed  | failed     |
+| `tests/test_xen.py::test_mb2_launch_brings_the_iommu_up`                                          | passed                | passed  | failed     |
+| `tests/test_xen.py::test_mb2_launch_log_replays_to_the_pcrs`                                      | passed                | passed  | failed     |
 | `tests/test_xen.py::test_mb2_launch_log_declares_the_tpms_banks`                                  | passed                | xfailed | xfailed    |
 
 </details>
 
 ### With PSP DRTM service, TPM with SHA-256 alone
 
-| Entry                  | amd-drtm-test-image-4 | v0.5.2 | v0.5.3-rc1 |
+| Entry                  | amd-drtm-test-image-5 | v0.5.2 | v0.5.3-rc1 |
 |------------------------|-----------------------|--------|------------|
 | `xen_efi_launch`       | ✅                     | ❌      | ❌          |
 | `xen_efi`              | ✅                     | ✅      | ✅          |
@@ -500,7 +501,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `xen_efi_debug_launch` | ✅                     | ❌      | ❌          |
 | `linux`                | ✅                     | ✅      | ✅          |
 
-- `amd-drtm-test-image-4`: 123 passed, 1 skipped.
+- `amd-drtm-test-image-5`: 123 passed, 1 skipped.
 - `v0.5.2`: 87 passed, 1 skipped, 36 xfailed.
     - `xen_efi_launch` expected: classic SKL: no LAUNCH, so the PSP's locality locks stay on the TPM
     - `xen_efi_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
@@ -529,7 +530,7 @@ boot did, and the notes under the table what the suite expected of it.
 <details>
 <summary>Every test</summary>
 
-| Test                                                                                              | amd-drtm-test-image-4 | v0.5.2  | v0.5.3-rc1 |
+| Test                                                                                              | amd-drtm-test-image-5 | v0.5.2  | v0.5.3-rc1 |
 |---------------------------------------------------------------------------------------------------|-----------------------|---------|------------|
 | `tests/test_console.py::test_a_dump_is_the_bytes_it_spells`                                       | passed                | passed  | passed     |
 | `tests/test_console.py::test_the_newlines_a_long_dump_wraps_at_are_ignored`                       | passed                | passed  | passed     |
@@ -660,7 +661,7 @@ boot did, and the notes under the table what the suite expected of it.
 
 ### Without PSP, TPM with SHA-1, SHA-256 and SHA-384
 
-| Entry                  | amd-drtm-test-image-4 | v0.5.2 | v0.5.3-rc1 |
+| Entry                  | amd-drtm-test-image-5 | v0.5.2 | v0.5.3-rc1 |
 |------------------------|-----------------------|--------|------------|
 | `xen_efi_launch`       | ✅                     | ❌      | ❌          |
 | `xen_efi`              | ✅                     | ✅      | ✅          |
@@ -671,7 +672,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `xen_efi_debug_launch` | ✅                     | ❌      | ❌          |
 | `linux`                | ✅                     | ✅      | ✅          |
 
-- `amd-drtm-test-image-4`: 124 passed.
+- `amd-drtm-test-image-5`: 124 passed.
 - `v0.5.2`: 91 passed, 33 xfailed.
     - `xen_efi_launch` expected: the upstream Xen EFI launch extends PCR 18 in SHA-1 and SHA-256 alone
     - `xen_efi_launch` expected: the upstream SKL logs SHA-1 and SHA-256 whatever the TPM has
@@ -696,7 +697,7 @@ boot did, and the notes under the table what the suite expected of it.
 <details>
 <summary>Every test</summary>
 
-| Test                                                                                              | amd-drtm-test-image-4 | v0.5.2  | v0.5.3-rc1 |
+| Test                                                                                              | amd-drtm-test-image-5 | v0.5.2  | v0.5.3-rc1 |
 |---------------------------------------------------------------------------------------------------|-----------------------|---------|------------|
 | `tests/test_console.py::test_a_dump_is_the_bytes_it_spells`                                       | passed                | passed  | passed     |
 | `tests/test_console.py::test_the_newlines_a_long_dump_wraps_at_are_ignored`                       | passed                | passed  | passed     |
@@ -829,19 +830,17 @@ boot did, and the notes under the table what the suite expected of it.
 
 ### TPM with SHA-1 and SHA-256
 
-| Entry                 | amd-drtm-test-image-4 | v0.5.2 | v0.5.3-rc1 |
+| Entry                 | amd-drtm-test-image-5 | v0.5.2 | v0.5.3-rc1 |
 |-----------------------|-----------------------|--------|------------|
 | `xen_efi_launch`      | ✅                     | ❌      | ❌          |
 | `xen_efi`             | ✅                     | ✅      | ✅          |
 | `xen_mb2_launch`      | ✅                     | ❌      | ❌          |
 | `linux_launch`        | ✅                     | ❌      | ❌          |
-| `linux_legacy_launch` | ❌                     | ❌      | ❌          |
-| `linux_alt_launch`    | ❌                     | ❌      | ❌          |
+| `linux_legacy_launch` | ✅                     | ❌      | ❌          |
+| `linux_alt_launch`    | ✅                     | ❌      | ❌          |
 | `linux`               | ✅                     | ✅      | ✅          |
 
-- `amd-drtm-test-image-4`: 7 failed, 102 passed.
-    - `linux_legacy_launch`: 7 failed unexpectedly
-    - `linux_alt_launch`: 1 failed unexpectedly
+- `amd-drtm-test-image-5`: 109 passed.
 - `v0.5.2`: 87 passed, 22 xfailed.
     - `xen_efi_launch` expected: the upstream Xen's MLE_JOIN has the GDT base as its limit
     - `xen_mb2_launch` expected: the upstream Xen's MLE_JOIN has the GDT base as its limit
@@ -858,7 +857,7 @@ boot did, and the notes under the table what the suite expected of it.
 <details>
 <summary>Every test</summary>
 
-| Test                                                                                              | amd-drtm-test-image-4 | v0.5.2  | v0.5.3-rc1 |
+| Test                                                                                              | amd-drtm-test-image-5 | v0.5.2  | v0.5.3-rc1 |
 |---------------------------------------------------------------------------------------------------|-----------------------|---------|------------|
 | `tests/test_console.py::test_a_dump_is_the_bytes_it_spells`                                       | passed                | passed  | passed     |
 | `tests/test_console.py::test_the_newlines_a_long_dump_wraps_at_are_ignored`                       | passed                | passed  | passed     |
@@ -888,29 +887,29 @@ boot did, and the notes under the table what the suite expected of it.
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[xen_efi_launch]`                         | passed                | passed  | passed     |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[xen_mb2_launch]`                         | passed                | passed  | passed     |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[linux_launch]`                           | passed                | xfailed | xfailed    |
-| `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[linux_legacy_launch]`                    | failed                | xfailed | xfailed    |
+| `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[linux_legacy_launch]`                    | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_extends_the_drtm_pcrs[linux_alt_launch]`                       | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[xen_efi_launch]`                           | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[xen_mb2_launch]`                           | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[linux_launch]`                             | passed                | xfailed | xfailed    |
-| `tests/test_launch.py::test_launch_brings_every_cpu_up[linux_legacy_launch]`                      | failed                | xfailed | xfailed    |
+| `tests/test_launch.py::test_launch_brings_every_cpu_up[linux_legacy_launch]`                      | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_launch_brings_every_cpu_up[linux_alt_launch]`                         | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[xen_efi_launch]`                      | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[xen_efi]`                             | passed                | passed  | passed     |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[xen_mb2_launch]`                      | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[linux_launch]`                        | passed                | xfailed | xfailed    |
-| `tests/test_launch.py::test_boot_shows_no_unexpected_errors[linux_legacy_launch]`                 | failed                | xfailed | xfailed    |
+| `tests/test_launch.py::test_boot_shows_no_unexpected_errors[linux_legacy_launch]`                 | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[linux_alt_launch]`                    | passed                | xfailed | xfailed    |
 | `tests/test_launch.py::test_boot_shows_no_unexpected_errors[linux]`                               | passed                | passed  | passed     |
 | `tests/test_linux.py::test_launch_is_seen_by_linux`                                               | passed                | xfailed | xfailed    |
 | `tests/test_linux.py::test_launch_brings_the_iommu_up`                                            | passed                | xfailed | xfailed    |
 | `tests/test_linux.py::test_launch_log_declares_the_tpms_banks`                                    | passed                | xfailed | xfailed    |
-| `tests/test_linux.py::test_legacy_launch_is_seen_by_linux`                                        | failed                | xfailed | xfailed    |
-| `tests/test_linux.py::test_legacy_launch_brings_the_iommu_up`                                     | failed                | xfailed | xfailed    |
-| `tests/test_linux.py::test_legacy_launch_log_declares_the_tpms_banks`                             | failed                | xfailed | xfailed    |
+| `tests/test_linux.py::test_legacy_launch_is_seen_by_linux`                                        | passed                | xfailed | xfailed    |
+| `tests/test_linux.py::test_legacy_launch_brings_the_iommu_up`                                     | passed                | xfailed | xfailed    |
+| `tests/test_linux.py::test_legacy_launch_log_declares_the_tpms_banks`                             | passed                | xfailed | xfailed    |
 | `tests/test_linux.py::test_alt_launch_is_seen_by_linux`                                           | passed                | xfailed | xfailed    |
 | `tests/test_linux.py::test_alt_launch_log_declares_the_tpms_banks`                                | passed                | xfailed | xfailed    |
-| `tests/test_linux.py::test_the_command_line_is_measured_into_pcr_18_alone`                        | failed                | xfailed | xfailed    |
+| `tests/test_linux.py::test_the_command_line_is_measured_into_pcr_18_alone`                        | passed                | xfailed | xfailed    |
 | `tests/test_linux.py::test_normal_boot_launches_nothing`                                          | passed                | passed  | passed     |
 | `tests/test_matrix.py::test_the_workflow_gets_every_release_under_every_configuration`            | passed                | passed  | passed     |
 | `tests/test_matrix.py::test_a_selection_of_releases_is_kept_in_the_order_given`                   | passed                | passed  | passed     |
@@ -974,7 +973,7 @@ boot did, and the notes under the table what the suite expected of it.
 
 ### TPM with SHA-256 alone
 
-| Entry                 | amd-drtm-test-image-4 | v0.5.2 | v0.5.3-rc1 |
+| Entry                 | amd-drtm-test-image-5 | v0.5.2 | v0.5.3-rc1 |
 |-----------------------|-----------------------|--------|------------|
 | `xen_efi_launch`      | ✅                     | ❌      | ❌          |
 | `xen_efi`             | ✅                     | ✅      | ✅          |
@@ -984,7 +983,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `linux_alt_launch`    | ✅                     | ❌      | ❌          |
 | `linux`               | ✅                     | ✅      | ✅          |
 
-- `amd-drtm-test-image-4`: 109 passed.
+- `amd-drtm-test-image-5`: 109 passed.
 - `v0.5.2`: 87 passed, 22 xfailed.
     - `xen_efi_launch` expected: the upstream Xen's MLE_JOIN has the GDT base as its limit
     - `xen_mb2_launch` expected: the upstream Xen's MLE_JOIN has the GDT base as its limit
@@ -1001,7 +1000,7 @@ boot did, and the notes under the table what the suite expected of it.
 <details>
 <summary>Every test</summary>
 
-| Test                                                                                              | amd-drtm-test-image-4 | v0.5.2  | v0.5.3-rc1 |
+| Test                                                                                              | amd-drtm-test-image-5 | v0.5.2  | v0.5.3-rc1 |
 |---------------------------------------------------------------------------------------------------|-----------------------|---------|------------|
 | `tests/test_console.py::test_a_dump_is_the_bytes_it_spells`                                       | passed                | passed  | passed     |
 | `tests/test_console.py::test_the_newlines_a_long_dump_wraps_at_are_ignored`                       | passed                | passed  | passed     |
@@ -1117,7 +1116,7 @@ boot did, and the notes under the table what the suite expected of it.
 
 ### TPM with SHA-1, SHA-256 and SHA-384
 
-| Entry                 | amd-drtm-test-image-4 | v0.5.2 | v0.5.3-rc1 |
+| Entry                 | amd-drtm-test-image-5 | v0.5.2 | v0.5.3-rc1 |
 |-----------------------|-----------------------|--------|------------|
 | `xen_efi_launch`      | ✅                     | ❌      | ❌          |
 | `xen_efi`             | ✅                     | ✅      | ✅          |
@@ -1127,7 +1126,7 @@ boot did, and the notes under the table what the suite expected of it.
 | `linux_alt_launch`    | ✅                     | ❌      | ❌          |
 | `linux`               | ✅                     | ✅      | ✅          |
 
-- `amd-drtm-test-image-4`: 109 passed.
+- `amd-drtm-test-image-5`: 109 passed.
 - `v0.5.2`: 87 passed, 22 xfailed.
     - `xen_efi_launch` expected: the upstream Xen's MLE_JOIN has the GDT base as its limit
     - `xen_mb2_launch` expected: the upstream Xen's MLE_JOIN has the GDT base as its limit
@@ -1144,7 +1143,7 @@ boot did, and the notes under the table what the suite expected of it.
 <details>
 <summary>Every test</summary>
 
-| Test                                                                                              | amd-drtm-test-image-4 | v0.5.2  | v0.5.3-rc1 |
+| Test                                                                                              | amd-drtm-test-image-5 | v0.5.2  | v0.5.3-rc1 |
 |---------------------------------------------------------------------------------------------------|-----------------------|---------|------------|
 | `tests/test_console.py::test_a_dump_is_the_bytes_it_spells`                                       | passed                | passed  | passed     |
 | `tests/test_console.py::test_the_newlines_a_long_dump_wraps_at_are_ignored`                       | passed                | passed  | passed     |
