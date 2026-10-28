@@ -24,12 +24,12 @@ from drtmtest.trenchboot import CACHE_DIR
 
 # Built on Ubuntu 24.04, whose glibc, glib and pixman the `ubuntu-24.04`
 # runner image has. Bump the tag and the hash together, on purpose.
-TAG = "drtm-11.1.50-1"
+TAG = "drtm-11.1.50-2"
 _URL = "https://github.com/iwanicki92/qemu/releases/download/{tag}/{name}"
 _NAME = "qemu-{tag}-ubuntu-24.04.tar.gz"
 BUNDLE = Asset(
     url=_URL.format(tag=TAG, name=_NAME.format(tag=TAG)),
-    sha256="b34566363338818997d887a51801a109ab55b5930ec8e501d6f05ef85086f1a6",
+    sha256="b1330c24b9917d005476aeb305bfda5127f5691a881f9e7d84878771a0b3390d",
 )
 
 BINARY = Path("qemu/bin/qemu-system-x86_64")
